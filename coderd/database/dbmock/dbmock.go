@@ -4342,6 +4342,21 @@ func (mr *MockStoreMockRecorder) RevokeDBCryptKey(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeDBCryptKey", reflect.TypeOf((*MockStore)(nil).RevokeDBCryptKey), arg0, arg1)
 }
 
+// TransferWorkspace mocks base method.
+func (m *MockStore) TransferWorkspace(arg0 context.Context, arg1 database.TransferWorkspaceParams) (database.Workspace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransferWorkspace", arg0, arg1)
+	ret0, _ := ret[0].(database.Workspace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransferWorkspace indicates an expected call of TransferWorkspace.
+func (mr *MockStoreMockRecorder) TransferWorkspace(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferWorkspace", reflect.TypeOf((*MockStore)(nil).TransferWorkspace), arg0, arg1)
+}
+
 // TryAcquireLock mocks base method.
 func (m *MockStore) TryAcquireLock(arg0 context.Context, arg1 int64) (bool, error) {
 	m.ctrl.T.Helper()

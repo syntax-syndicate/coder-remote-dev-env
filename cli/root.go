@@ -120,6 +120,7 @@ func (r *RootCmd) CoreSubcommands() []*serpent.Command {
 		r.unfavorite(),
 		r.update(),
 		r.whoami(),
+		r.transfer(),
 
 		// Hidden
 		r.expCmd(),

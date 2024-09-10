@@ -15213,6 +15213,41 @@ func (q *sqlQuerier) InsertWorkspace(ctx context.Context, arg InsertWorkspacePar
 	return i, err
 }
 
+const transferWorkspace = `-- name: TransferWorkspace :one
+UPDATE workspaces
+SET owner_id = $1
+WHERE id = $2
+RETURNING id, created_at, updated_at, owner_id, organization_id, template_id, deleted, name, autostart_schedule, ttl, last_used_at, dormant_at, deleting_at, automatic_updates, favorite
+`
+
+type TransferWorkspaceParams struct {
+	TargetUser  uuid.UUID `db:"target_user" json:"target_user"`
+	WorkspaceID uuid.UUID `db:"workspace_id" json:"workspace_id"`
+}
+
+func (q *sqlQuerier) TransferWorkspace(ctx context.Context, arg TransferWorkspaceParams) (Workspace, error) {
+	row := q.db.QueryRowContext(ctx, transferWorkspace, arg.TargetUser, arg.WorkspaceID)
+	var i Workspace
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OwnerID,
+		&i.OrganizationID,
+		&i.TemplateID,
+		&i.Deleted,
+		&i.Name,
+		&i.AutostartSchedule,
+		&i.Ttl,
+		&i.LastUsedAt,
+		&i.DormantAt,
+		&i.DeletingAt,
+		&i.AutomaticUpdates,
+		&i.Favorite,
+	)
+	return i, err
+}
+
 const unfavoriteWorkspace = `-- name: UnfavoriteWorkspace :exec
 UPDATE workspaces SET favorite = false WHERE id = $1
 `

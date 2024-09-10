@@ -2055,6 +2055,13 @@ func (m metricsStore) RevokeDBCryptKey(ctx context.Context, activeKeyDigest stri
 	return r0
 }
 
+func (m metricsStore) TransferWorkspace(ctx context.Context, arg database.TransferWorkspaceParams) (database.Workspace, error) {
+	start := time.Now()
+	r0, r1 := m.s.TransferWorkspace(ctx, arg)
+	m.queryLatencies.WithLabelValues("TransferWorkspace").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) TryAcquireLock(ctx context.Context, pgTryAdvisoryXactLock int64) (bool, error) {
 	start := time.Now()
 	ok, err := m.s.TryAcquireLock(ctx, pgTryAdvisoryXactLock)

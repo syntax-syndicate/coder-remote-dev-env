@@ -687,3 +687,9 @@ UPDATE workspaces SET favorite = true WHERE id = @id;
 
 -- name: UnfavoriteWorkspace :exec
 UPDATE workspaces SET favorite = false WHERE id = @id;
+
+-- name: TransferWorkspace :one
+UPDATE workspaces
+SET owner_id = @target_user
+WHERE id = @workspace_id
+RETURNING *;

@@ -278,6 +278,7 @@ const (
 	BuildReasonDormancy   BuildReason = "dormancy"
 	BuildReasonFailedstop BuildReason = "failedstop"
 	BuildReasonAutodelete BuildReason = "autodelete"
+	BuildReasonTransfer   BuildReason = "transfer"
 )
 
 func (e *BuildReason) Scan(src interface{}) error {
@@ -322,7 +323,8 @@ func (e BuildReason) Valid() bool {
 		BuildReasonAutostop,
 		BuildReasonDormancy,
 		BuildReasonFailedstop,
-		BuildReasonAutodelete:
+		BuildReasonAutodelete,
+		BuildReasonTransfer:
 		return true
 	}
 	return false
@@ -336,6 +338,7 @@ func AllBuildReasonValues() []BuildReason {
 		BuildReasonDormancy,
 		BuildReasonFailedstop,
 		BuildReasonAutodelete,
+		BuildReasonTransfer,
 	}
 }
 

@@ -1,9 +1,11 @@
 package codersdk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -653,6 +655,25 @@ func (c *Client) WorkspaceTimings(ctx context.Context, id uuid.UUID) (WorkspaceT
 	}
 	var timings WorkspaceTimings
 	return timings, json.NewDecoder(res.Body).Decode(&timings)
+}
+
+func (c *Client) TransferWorkspace(ctx context.Context, workspaceOwner, workspace string, targetUser uuid.UUID) (uuid.UUID, error) {
+	res, err := c.Request(ctx, http.MethodPost, fmt.Sprintf("/api/v2/users/%s/workspace/%s/transfer/%s", workspaceOwner, workspace, targetUser), nil)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusAccepted {
+		return uuid.Nil, ReadBodyAsError(res)
+	}
+
+	buildID, err := io.ReadAll(res.Body)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	buildID = bytes.TrimSpace(buildID)
+	return uuid.MustParse(string(buildID)), nil
 }
 
 // WorkspaceNotifyChannel is the PostgreSQL NOTIFY

@@ -321,6 +321,165 @@ func (api *API) workspaceBuildByBuildNumber(rw http.ResponseWriter, r *http.Requ
 	httpapi.Write(ctx, rw, http.StatusOK, apiBuild)
 }
 
+// TODO
+//
+// seems like something's fucky with SSH after transfer... create new workspace to make sure it isn't for all new workspaces
+// ...we need to stop & restart the agent after transfer
+func (api *API) workspaceTransferToUser(rw http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	owner := httpmw.UserParam(r)
+	workspaceName := chi.URLParam(r, "workspacename")
+
+	// Target user
+	// TODO: validate in same org
+	// TODO: add transfer permission
+	// TODO: user has transfer permission
+	// TODO: transfer in transaction
+	// TODO: auditing
+	// TODO: consider how we test this (integration tests for terraform don't exist currently)
+	// TODO: locking for HA
+	// TODO: in-memory coordinator vs pgcoord
+	// TODO: warn if personal info used in non-ephemeral resource
+	//
+	p := chi.URLParam(r, "targetuserid")
+	targetUserID, err := uuid.Parse(p)
+	if err != nil {
+		if httpapi.Is404Error(err) {
+			httpapi.ResourceNotFound(rw)
+			return
+		}
+
+		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+			Message: "Invalid target user UUID.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	// Workspace
+	workspace, err := api.Database.GetWorkspaceByOwnerIDAndName(ctx, database.GetWorkspaceByOwnerIDAndNameParams{
+		OwnerID: owner.ID,
+		Name:    workspaceName,
+	})
+	if httpapi.Is404Error(err) {
+		httpapi.ResourceNotFound(rw)
+		return
+	}
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Internal error fetching workspace by name.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	// Template
+	template, err := api.Database.GetTemplateByID(ctx, workspace.TemplateID)
+	if httpapi.Is404Error(err) {
+		httpapi.ResourceNotFound(rw)
+		return
+	}
+
+	// Do this upfront to save work. If this fails, the rest of the work
+	// would be wasted.
+	if !api.Authorize(r, policy.ActionCreate,
+		rbac.ResourceWorkspace.InOrg(template.OrganizationID).WithOwner(owner.ID.String())) {
+		httpapi.ResourceNotFound(rw)
+		return
+	}
+
+	// Latest build
+	latestBuild, err := api.Database.GetLatestWorkspaceBuildByWorkspaceID(ctx, workspace.ID)
+	if httpapi.Is404Error(err) {
+		httpapi.ResourceNotFound(rw)
+		return
+	}
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Internal error fetching workspace by name.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	params, err := api.Database.GetWorkspaceBuildParameters(ctx, latestBuild.ID)
+	if httpapi.Is404Error(err) {
+		httpapi.ResourceNotFound(rw)
+		return
+	}
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Internal error fetching workspace by name.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+	richParams := db2sdk.WorkspaceBuildParameters(params)
+
+	var (
+		provisionerJob *database.ProvisionerJob
+		workspaceBuild *database.WorkspaceBuild
+	)
+
+	// TODO: instead, call postWorkspaceBuilds?
+	// 			we'll need to wait for the stop build to complete, then execute the start build
+	//			question is: do we do this synchronously (i.e. block response until builds complete) or async?
+	//			i suppose the workspace ownership change is 1 operation, and the builds are another... but we need some
+	//			supervision of the latter process (if we're to support transferring a workspace as one API operation)
+
+	err = api.Database.InTx(func(db database.Store) error {
+		// Execute transfer.
+		workspace, err = api.Database.TransferWorkspace(ctx, database.TransferWorkspaceParams{
+			TargetUser:  targetUserID,
+			WorkspaceID: workspace.ID,
+		})
+		if err != nil {
+			// TODO: log
+			return err
+		}
+
+		// Rebuild workspace with new ownership.
+		builder := wsbuilder.New(workspace, database.WorkspaceTransitionStop).
+			Reason(database.BuildReasonTransfer).
+			Initiator(owner.ID).
+			ActiveVersion(). // always require active version?
+			RichParameterValues(richParams).
+			VersionID(latestBuild.TemplateVersionID)
+
+		workspaceBuild, provisionerJob, err = builder.Build(
+			ctx,
+			db,
+			func(action policy.Action, object rbac.Objecter) bool {
+				return api.Authorize(r, action, object)
+			},
+			audit.WorkspaceBuildBaggageFromRequest(r),
+		)
+		return err
+	}, nil)
+	var bldErr wsbuilder.BuildError
+	if xerrors.As(err, &bldErr) {
+		httpapi.Write(ctx, rw, bldErr.Status, codersdk.Response{
+			Message: bldErr.Message,
+			Detail:  bldErr.Error(),
+		})
+		return
+	}
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Internal error transferring workspace.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+	err = provisionerjobs.PostJob(api.Pubsub, *provisionerJob)
+	if err != nil {
+		// Client probably doesn't care about this error, so just log it.
+		api.Logger.Error(ctx, "failed to post provisioner job to pubsub", slog.Error(err))
+	}
+
+	httpapi.Write(ctx, rw, http.StatusAccepted, workspaceBuild.ID)
+}
+
 // Azure supports instance identity verification:
 // https://docs.microsoft.com/en-us/azure/virtual-machines/windows/instance-metadata-service?tabs=linux#tabgroup_14
 //

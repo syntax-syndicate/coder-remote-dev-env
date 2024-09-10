@@ -3204,6 +3204,11 @@ func (q *querier) RevokeDBCryptKey(ctx context.Context, activeKeyDigest string) 
 	return q.db.RevokeDBCryptKey(ctx, activeKeyDigest)
 }
 
+func (q *querier) TransferWorkspace(ctx context.Context, arg database.TransferWorkspaceParams) (database.Workspace, error) {
+	// TODO: auth
+	return q.db.TransferWorkspace(ctx, arg)
+}
+
 func (q *querier) TryAcquireLock(ctx context.Context, id int64) (bool, error) {
 	return q.db.TryAcquireLock(ctx, id)
 }

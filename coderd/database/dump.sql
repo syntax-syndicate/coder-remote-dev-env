@@ -33,7 +33,8 @@ CREATE TYPE build_reason AS ENUM (
     'autostop',
     'dormancy',
     'failedstop',
-    'autodelete'
+    'autodelete',
+    'transfer'
 );
 
 CREATE TYPE crypto_key_feature AS ENUM (

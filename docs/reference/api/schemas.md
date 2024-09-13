@@ -4413,6 +4413,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `user`                    |
 | `workspace`               |
 | `workspace_dormant`       |
+| `workspace_prebuild`      |
 | `workspace_proxy`         |
 
 ## codersdk.RateLimitConfig

@@ -168,6 +168,12 @@ export const RBACResourceActions: Partial<
     stop: "allows stopping a workspace",
     update: "edit workspace settings (scheduling, permissions, parameters)",
   },
+  workspace_prebuild: {
+    create: "create workspace prebuild",
+    delete: "delete workspace prebuild",
+    read: "read workspace prebuild",
+    update: "update workspace prebuild",
+  },
   workspace_proxy: {
     create: "create a workspace proxy",
     delete: "delete a workspace proxy",

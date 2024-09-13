@@ -2576,6 +2576,16 @@ func (q *querier) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceApp
 	return fetch(q.log, q.auth, q.db.GetWorkspaceByWorkspaceAppID)(ctx, workspaceAppID)
 }
 
+func (q *querier) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
+	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacePrebuildParameters)(ctx, workspacePrebuildID)
+}
+
+func (q *querier) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuild, error) {
+	return fetchWithPostFilter(q.auth, policy.ActionRead, func(ctx context.Context, _ interface{}) ([]database.WorkspacePrebuild, error) {
+		return q.db.GetWorkspacePrebuilds(ctx)
+	})(ctx, nil)
+}
+
 func (q *querier) GetWorkspaceProxies(ctx context.Context) ([]database.WorkspaceProxy, error) {
 	return fetchWithPostFilter(q.auth, policy.ActionRead, func(ctx context.Context, _ interface{}) ([]database.WorkspaceProxy, error) {
 		return q.db.GetWorkspaceProxies(ctx)
@@ -4104,6 +4114,13 @@ func (q *querier) UpsertWorkspaceAgentPortShare(ctx context.Context, arg databas
 	}
 
 	return q.db.UpsertWorkspaceAgentPortShare(ctx, arg)
+}
+
+func (q *querier) UpsertWorkspacePrebuild(ctx context.Context, arg database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error) {
+	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceWorkspacePrebuild); err != nil {
+		return database.WorkspacePrebuild{}, err
+	}
+	return q.db.UpsertWorkspacePrebuild(ctx, arg)
 }
 
 func (q *querier) GetAuthorizedTemplates(ctx context.Context, arg database.GetTemplatesWithFilterParams, _ rbac.PreparedAuthorized) ([]database.Template, error) {

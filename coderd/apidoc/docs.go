@@ -12055,6 +12055,7 @@ const docTemplate = `{
                 "user",
                 "workspace",
                 "workspace_dormant",
+                "workspace_prebuild",
                 "workspace_proxy"
             ],
             "x-enum-varnames": [
@@ -12088,6 +12089,7 @@ const docTemplate = `{
                 "ResourceUser",
                 "ResourceWorkspace",
                 "ResourceWorkspaceDormant",
+                "ResourceWorkspacePrebuild",
                 "ResourceWorkspaceProxy"
             ]
         },

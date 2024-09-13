@@ -209,6 +209,7 @@ Status Code **200**
 | `resource_type` | `user`                    |
 | `resource_type` | `workspace`               |
 | `resource_type` | `workspace_dormant`       |
+| `resource_type` | `workspace_prebuild`      |
 | `resource_type` | `workspace_proxy`         |
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).
@@ -369,6 +370,7 @@ Status Code **200**
 | `resource_type` | `user`                    |
 | `resource_type` | `workspace`               |
 | `resource_type` | `workspace_dormant`       |
+| `resource_type` | `workspace_prebuild`      |
 | `resource_type` | `workspace_proxy`         |
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).
@@ -529,6 +531,7 @@ Status Code **200**
 | `resource_type` | `user`                    |
 | `resource_type` | `workspace`               |
 | `resource_type` | `workspace_dormant`       |
+| `resource_type` | `workspace_prebuild`      |
 | `resource_type` | `workspace_proxy`         |
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).
@@ -658,6 +661,7 @@ Status Code **200**
 | `resource_type` | `user`                    |
 | `resource_type` | `workspace`               |
 | `resource_type` | `workspace_dormant`       |
+| `resource_type` | `workspace_prebuild`      |
 | `resource_type` | `workspace_proxy`         |
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).
@@ -917,6 +921,7 @@ Status Code **200**
 | `resource_type` | `user`                    |
 | `resource_type` | `workspace`               |
 | `resource_type` | `workspace_dormant`       |
+| `resource_type` | `workspace_prebuild`      |
 | `resource_type` | `workspace_proxy`         |
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).

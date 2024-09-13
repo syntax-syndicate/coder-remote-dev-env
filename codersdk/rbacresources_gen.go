@@ -34,6 +34,7 @@ const (
 	ResourceUser                   RBACResource = "user"
 	ResourceWorkspace              RBACResource = "workspace"
 	ResourceWorkspaceDormant       RBACResource = "workspace_dormant"
+	ResourceWorkspacePrebuild      RBACResource = "workspace_prebuild"
 	ResourceWorkspaceProxy         RBACResource = "workspace_proxy"
 )
 
@@ -88,5 +89,6 @@ var RBACResourceActions = map[RBACResource][]RBACAction{
 	ResourceUser:                   {ActionCreate, ActionDelete, ActionRead, ActionReadPersonal, ActionUpdate, ActionUpdatePersonal},
 	ResourceWorkspace:              {ActionApplicationConnect, ActionCreate, ActionDelete, ActionRead, ActionSSH, ActionWorkspaceStart, ActionWorkspaceStop, ActionUpdate},
 	ResourceWorkspaceDormant:       {ActionApplicationConnect, ActionCreate, ActionDelete, ActionRead, ActionSSH, ActionWorkspaceStart, ActionWorkspaceStop, ActionUpdate},
+	ResourceWorkspacePrebuild:      {ActionCreate, ActionDelete, ActionRead, ActionUpdate},
 	ResourceWorkspaceProxy:         {ActionCreate, ActionDelete, ActionRead, ActionUpdate},
 }

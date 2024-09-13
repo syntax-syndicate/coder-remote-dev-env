@@ -1574,6 +1574,24 @@ CREATE VIEW workspace_build_with_user AS
 
 COMMENT ON VIEW workspace_build_with_user IS 'Joins in the username + avatar url of the initiated by user.';
 
+CREATE TABLE workspace_prebuild_parameters (
+    workspace_prebuild_id uuid NOT NULL,
+    name text NOT NULL,
+    value text NOT NULL
+);
+
+CREATE TABLE workspace_prebuilds (
+    id uuid NOT NULL,
+    name text NOT NULL,
+    replicas integer NOT NULL,
+    organization_id uuid NOT NULL,
+    template_id uuid NOT NULL,
+    template_version_id uuid NOT NULL,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
 CREATE TABLE workspace_proxies (
     id uuid NOT NULL,
     name text NOT NULL,
@@ -1887,6 +1905,12 @@ ALTER TABLE ONLY workspace_builds
 
 ALTER TABLE ONLY workspace_builds
     ADD CONSTRAINT workspace_builds_workspace_id_build_number_key UNIQUE (workspace_id, build_number);
+
+ALTER TABLE ONLY workspace_prebuild_parameters
+    ADD CONSTRAINT workspace_prebuild_parameters_pkey PRIMARY KEY (workspace_prebuild_id, name);
+
+ALTER TABLE ONLY workspace_prebuilds
+    ADD CONSTRAINT workspace_prebuilds_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY workspace_proxies
     ADD CONSTRAINT workspace_proxies_pkey PRIMARY KEY (id);
@@ -2257,6 +2281,21 @@ ALTER TABLE ONLY workspace_builds
 
 ALTER TABLE ONLY workspace_builds
     ADD CONSTRAINT workspace_builds_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY workspace_prebuild_parameters
+    ADD CONSTRAINT workspace_prebuild_parameters_workspace_prebuild_id_fkey FOREIGN KEY (workspace_prebuild_id) REFERENCES workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY workspace_prebuilds
+    ADD CONSTRAINT workspace_prebuilds_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY workspace_prebuilds
+    ADD CONSTRAINT workspace_prebuilds_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY workspace_prebuilds
+    ADD CONSTRAINT workspace_prebuilds_template_id_fkey FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY workspace_prebuilds
+    ADD CONSTRAINT workspace_prebuilds_template_version_id_fkey FOREIGN KEY (template_version_id) REFERENCES template_versions(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY workspace_resource_metadata
     ADD CONSTRAINT workspace_resource_metadata_workspace_resource_id_fkey FOREIGN KEY (workspace_resource_id) REFERENCES workspace_resources(id) ON DELETE CASCADE;

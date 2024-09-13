@@ -305,6 +305,15 @@ func (a GetOAuth2ProviderAppsByUserIDRow) RBACObject() rbac.Object {
 	return a.OAuth2ProviderApp.RBACObject()
 }
 
+func (p WorkspacePrebuild) RBACObject() rbac.Object {
+	// We do not specify WithOwner here since prebuilds will be a shared resource across owners & org template admins.
+	return rbac.ResourceWorkspacePrebuild.WithID(p.ID).InOrg(p.OrganizationID)
+}
+
+func (p WorkspacePrebuildParameter) RBACObject() rbac.Object {
+	return rbac.ResourceWorkspacePrebuild.WithID(p.WorkspacePrebuildID)
+}
+
 type WorkspaceAgentConnectionStatus struct {
 	Status           WorkspaceAgentStatus `json:"status"`
 	FirstConnectedAt *time.Time           `json:"first_connected_at"`

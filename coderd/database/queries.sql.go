@@ -10746,6 +10746,118 @@ func (q *sqlQuerier) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusP
 	return i, err
 }
 
+const getWorkspacePrebuildParameters = `-- name: GetWorkspacePrebuildParameters :many
+SELECT workspace_prebuild_id, name, value FROM workspace_prebuild_parameters WHERE workspace_prebuild_id = $1
+`
+
+func (q *sqlQuerier) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]WorkspacePrebuildParameter, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkspacePrebuildParameters, workspacePrebuildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkspacePrebuildParameter
+	for rows.Next() {
+		var i WorkspacePrebuildParameter
+		if err := rows.Scan(&i.WorkspacePrebuildID, &i.Name, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWorkspacePrebuilds = `-- name: GetWorkspacePrebuilds :many
+SELECT id, name, replicas, organization_id, template_id, template_version_id, created_by, created_at, updated_at FROM workspace_prebuilds
+`
+
+func (q *sqlQuerier) GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuild, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkspacePrebuilds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkspacePrebuild
+	for rows.Next() {
+		var i WorkspacePrebuild
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Replicas,
+			&i.OrganizationID,
+			&i.TemplateID,
+			&i.TemplateVersionID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const upsertWorkspacePrebuild = `-- name: UpsertWorkspacePrebuild :one
+INSERT INTO workspace_prebuilds (id, name, replicas, organization_id, template_id, template_version_id, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO UPDATE
+    SET name                = $2,
+        replicas            = $3,
+        organization_id     = $4,
+        template_id         = $5,
+        template_version_id = $6,
+        created_by          = $7
+RETURNING id, name, replicas, organization_id, template_id, template_version_id, created_by, created_at, updated_at
+`
+
+type UpsertWorkspacePrebuildParams struct {
+	ID                uuid.UUID     `db:"id" json:"id"`
+	Name              string        `db:"name" json:"name"`
+	Replicas          int32         `db:"replicas" json:"replicas"`
+	OrganizationID    uuid.UUID     `db:"organization_id" json:"organization_id"`
+	TemplateID        uuid.UUID     `db:"template_id" json:"template_id"`
+	TemplateVersionID uuid.UUID     `db:"template_version_id" json:"template_version_id"`
+	CreatedBy         uuid.NullUUID `db:"created_by" json:"created_by"`
+}
+
+func (q *sqlQuerier) UpsertWorkspacePrebuild(ctx context.Context, arg UpsertWorkspacePrebuildParams) (WorkspacePrebuild, error) {
+	row := q.db.QueryRowContext(ctx, upsertWorkspacePrebuild,
+		arg.ID,
+		arg.Name,
+		arg.Replicas,
+		arg.OrganizationID,
+		arg.TemplateID,
+		arg.TemplateVersionID,
+		arg.CreatedBy,
+	)
+	var i WorkspacePrebuild
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Replicas,
+		&i.OrganizationID,
+		&i.TemplateID,
+		&i.TemplateVersionID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteWorkspaceAgentPortShare = `-- name: DeleteWorkspaceAgentPortShare :exec
 DELETE FROM
 	workspace_agent_port_share

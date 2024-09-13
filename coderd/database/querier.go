@@ -321,6 +321,8 @@ type sqlcQuerier interface {
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByOwnerIDAndName(ctx context.Context, arg GetWorkspaceByOwnerIDAndNameParams) (Workspace, error)
 	GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceAppID uuid.UUID) (Workspace, error)
+	GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]WorkspacePrebuildParameter, error)
+	GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuild, error)
 	GetWorkspaceProxies(ctx context.Context) ([]WorkspaceProxy, error)
 	// Finds a workspace proxy that has an access URL or app hostname that matches
 	// the provided hostname. This is to check if a hostname matches any workspace
@@ -516,6 +518,7 @@ type sqlcQuerier interface {
 	// combination. The result is stored in the template_usage_stats table.
 	UpsertTemplateUsageStats(ctx context.Context) error
 	UpsertWorkspaceAgentPortShare(ctx context.Context, arg UpsertWorkspaceAgentPortShareParams) (WorkspaceAgentPortShare, error)
+	UpsertWorkspacePrebuild(ctx context.Context, arg UpsertWorkspacePrebuildParams) (WorkspacePrebuild, error)
 }
 
 var _ sqlcQuerier = (*sqlQuerier)(nil)

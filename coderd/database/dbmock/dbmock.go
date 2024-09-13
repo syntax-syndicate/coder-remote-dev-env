@@ -3263,6 +3263,36 @@ func (mr *MockStoreMockRecorder) GetWorkspaceByWorkspaceAppID(arg0, arg1 any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspaceByWorkspaceAppID", reflect.TypeOf((*MockStore)(nil).GetWorkspaceByWorkspaceAppID), arg0, arg1)
 }
 
+// GetWorkspacePrebuildParameters mocks base method.
+func (m *MockStore) GetWorkspacePrebuildParameters(arg0 context.Context, arg1 uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkspacePrebuildParameters", arg0, arg1)
+	ret0, _ := ret[0].([]database.WorkspacePrebuildParameter)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkspacePrebuildParameters indicates an expected call of GetWorkspacePrebuildParameters.
+func (mr *MockStoreMockRecorder) GetWorkspacePrebuildParameters(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacePrebuildParameters", reflect.TypeOf((*MockStore)(nil).GetWorkspacePrebuildParameters), arg0, arg1)
+}
+
+// GetWorkspacePrebuilds mocks base method.
+func (m *MockStore) GetWorkspacePrebuilds(arg0 context.Context) ([]database.WorkspacePrebuild, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkspacePrebuilds", arg0)
+	ret0, _ := ret[0].([]database.WorkspacePrebuild)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkspacePrebuilds indicates an expected call of GetWorkspacePrebuilds.
+func (mr *MockStoreMockRecorder) GetWorkspacePrebuilds(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacePrebuilds", reflect.TypeOf((*MockStore)(nil).GetWorkspacePrebuilds), arg0)
+}
+
 // GetWorkspaceProxies mocks base method.
 func (m *MockStore) GetWorkspaceProxies(arg0 context.Context) ([]database.WorkspaceProxy, error) {
 	m.ctrl.T.Helper()
@@ -5579,6 +5609,21 @@ func (m *MockStore) UpsertWorkspaceAgentPortShare(arg0 context.Context, arg1 dat
 func (mr *MockStoreMockRecorder) UpsertWorkspaceAgentPortShare(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertWorkspaceAgentPortShare", reflect.TypeOf((*MockStore)(nil).UpsertWorkspaceAgentPortShare), arg0, arg1)
+}
+
+// UpsertWorkspacePrebuild mocks base method.
+func (m *MockStore) UpsertWorkspacePrebuild(arg0 context.Context, arg1 database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertWorkspacePrebuild", arg0, arg1)
+	ret0, _ := ret[0].(database.WorkspacePrebuild)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertWorkspacePrebuild indicates an expected call of UpsertWorkspacePrebuild.
+func (mr *MockStoreMockRecorder) UpsertWorkspacePrebuild(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertWorkspacePrebuild", reflect.TypeOf((*MockStore)(nil).UpsertWorkspacePrebuild), arg0, arg1)
 }
 
 // Wrappers mocks base method.

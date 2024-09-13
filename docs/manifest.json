@@ -1178,6 +1178,11 @@
 							"path": "reference/cli/tokens_remove.md"
 						},
 						{
+							"title": "transfer",
+							"description": "Transfer a workspace",
+							"path": "reference/cli/transfer.md"
+						},
+						{
 							"title": "unfavorite",
 							"description": "Remove a workspace from your favorites",
 							"path": "reference/cli/unfavorite.md"

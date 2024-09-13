@@ -1558,6 +1558,13 @@ func (m metricsStore) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspac
 	return workspace, err
 }
 
+func (m metricsStore) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetWorkspacePrebuildByID(ctx, id)
+	m.queryLatencies.WithLabelValues("GetWorkspacePrebuildByID").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetWorkspacePrebuildParameters(ctx, workspacePrebuildID)

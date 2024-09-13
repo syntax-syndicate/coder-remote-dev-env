@@ -3263,6 +3263,21 @@ func (mr *MockStoreMockRecorder) GetWorkspaceByWorkspaceAppID(arg0, arg1 any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspaceByWorkspaceAppID", reflect.TypeOf((*MockStore)(nil).GetWorkspaceByWorkspaceAppID), arg0, arg1)
 }
 
+// GetWorkspacePrebuildByID mocks base method.
+func (m *MockStore) GetWorkspacePrebuildByID(arg0 context.Context, arg1 uuid.UUID) (database.WorkspacePrebuild, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkspacePrebuildByID", arg0, arg1)
+	ret0, _ := ret[0].(database.WorkspacePrebuild)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkspacePrebuildByID indicates an expected call of GetWorkspacePrebuildByID.
+func (mr *MockStoreMockRecorder) GetWorkspacePrebuildByID(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacePrebuildByID", reflect.TypeOf((*MockStore)(nil).GetWorkspacePrebuildByID), arg0, arg1)
+}
+
 // GetWorkspacePrebuildParameters mocks base method.
 func (m *MockStore) GetWorkspacePrebuildParameters(arg0 context.Context, arg1 uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
 	m.ctrl.T.Helper()

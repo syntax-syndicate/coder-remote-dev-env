@@ -373,6 +373,7 @@ WHERE
 		'0001-01-01 00:00:00+00'::timestamptz, -- deleting_at
 		'never'::automatic_updates, -- automatic_updates
 		false, -- favorite
+		null, -- prebuild_id
 		-- Extra columns added to `filtered_workspaces`
 		'', -- template_name
 		'00000000-0000-0000-0000-000000000000'::uuid, -- template_version_id

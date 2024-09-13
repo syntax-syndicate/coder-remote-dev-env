@@ -325,6 +325,17 @@ export interface CreateWorkspaceBuildRequest {
 	readonly log_level?: ProvisionerLogLevel;
 }
 
+// From codersdk/workspaceprebuilds.go
+export interface CreateWorkspacePrebuildRequest {
+	readonly CreatedBy: string;
+	readonly template_id: string;
+	readonly template_version_id: string;
+	readonly OrganizationID: string;
+	readonly name: string;
+	readonly rich_parameter_values?: Readonly<Array<WorkspacePrebuildParameter>>;
+	readonly replicas: number;
+}
+
 // From codersdk/workspaceproxy.go
 export interface CreateWorkspaceProxyRequest {
 	readonly name: string;
@@ -1982,6 +1993,26 @@ export interface WorkspaceHealth {
 // From codersdk/workspaces.go
 export interface WorkspaceOptions {
 	readonly include_deleted?: boolean;
+}
+
+// From codersdk/workspaceprebuilds.go
+export interface WorkspacePrebuild {
+	readonly id: string;
+	readonly name: string;
+	readonly replicas: number;
+	readonly organization_id: string;
+	readonly template_id: string;
+	readonly template_version_id: string;
+	readonly created_by?: string;
+	readonly created_at: string;
+	readonly updated_at: string;
+}
+
+// From codersdk/workspaceprebuilds.go
+export interface WorkspacePrebuildParameter {
+	readonly workspace_prebuild_id: string;
+	readonly name: string;
+	readonly value: string;
 }
 
 // From codersdk/workspaceproxy.go

@@ -2576,6 +2576,10 @@ func (q *querier) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceApp
 	return fetch(q.log, q.auth, q.db.GetWorkspaceByWorkspaceAppID)(ctx, workspaceAppID)
 }
 
+func (q *querier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
+	return fetch(q.log, q.auth, q.db.GetWorkspacePrebuildByID)(ctx, id)
+}
+
 func (q *querier) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
 	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacePrebuildParameters)(ctx, workspacePrebuildID)
 }

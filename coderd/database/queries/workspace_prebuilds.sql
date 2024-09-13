@@ -13,5 +13,8 @@ RETURNING *;
 -- name: GetWorkspacePrebuilds :many
 SELECT * FROM workspace_prebuilds;
 
+-- name: GetWorkspacePrebuildByID :one
+SELECT * FROM workspace_prebuilds WHERE id = @id;
+
 -- name: GetWorkspacePrebuildParameters :many
 SELECT * FROM workspace_prebuild_parameters WHERE workspace_prebuild_id = $1;

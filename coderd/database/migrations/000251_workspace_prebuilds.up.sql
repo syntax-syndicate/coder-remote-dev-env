@@ -17,4 +17,7 @@ CREATE TABLE workspace_prebuild_parameters (
     name text NOT NULL,
     value text NOT NULL,
     PRIMARY KEY (workspace_prebuild_id, name)
-)
+);
+
+ALTER TABLE workspaces
+ADD COLUMN prebuild_id uuid NULL REFERENCES workspace_prebuilds (id) ON DELETE SET NULL;

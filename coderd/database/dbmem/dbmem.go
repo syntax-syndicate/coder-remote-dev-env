@@ -6509,6 +6509,10 @@ func (q *FakeQuerier) GetWorkspaceByWorkspaceAppID(_ context.Context, workspaceA
 	return database.Workspace{}, sql.ErrNoRows
 }
 
+func (q *FakeQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
+	panic("not implemented")
+}
+
 func (q *FakeQuerier) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
 	panic("not implemented")
 }

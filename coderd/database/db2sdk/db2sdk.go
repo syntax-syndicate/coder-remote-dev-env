@@ -659,3 +659,17 @@ func Organization(organization database.Organization) codersdk.Organization {
 		IsDefault:   organization.IsDefault,
 	}
 }
+
+func WorkspacePrebuild(pb database.WorkspacePrebuild) codersdk.WorkspacePrebuild {
+	return codersdk.WorkspacePrebuild{
+		ID:                pb.ID,
+		Name:              pb.Name,
+		Replicas:          int(pb.Replicas),
+		OrganizationID:    pb.OrganizationID,
+		TemplateID:        pb.TemplateID,
+		TemplateVersionID: pb.TemplateVersionID,
+		CreatedBy:         pb.CreatedBy,
+		CreatedAt:         pb.CreatedAt,
+		UpdatedAt:         pb.UpdatedAt,
+	}
+}

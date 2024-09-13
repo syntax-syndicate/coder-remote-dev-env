@@ -1676,7 +1676,8 @@ CREATE TABLE workspaces (
     dormant_at timestamp with time zone,
     deleting_at timestamp with time zone,
     automatic_updates automatic_updates DEFAULT 'never'::automatic_updates NOT NULL,
-    favorite boolean DEFAULT false NOT NULL
+    favorite boolean DEFAULT false NOT NULL,
+    prebuild_id uuid
 );
 
 COMMENT ON COLUMN workspaces.favorite IS 'Favorite is true if the workspace owner has favorited the workspace.';
@@ -2308,6 +2309,9 @@ ALTER TABLE ONLY workspaces
 
 ALTER TABLE ONLY workspaces
     ADD CONSTRAINT workspaces_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY workspaces
+    ADD CONSTRAINT workspaces_prebuild_id_fkey FOREIGN KEY (prebuild_id) REFERENCES workspace_prebuilds(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY workspaces
     ADD CONSTRAINT workspaces_template_id_fkey FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE RESTRICT;

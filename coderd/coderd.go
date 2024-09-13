@@ -917,6 +917,10 @@ func New(options *Options) *API {
 							r.Delete("/", api.deleteOrganizationMember)
 							r.Put("/roles", api.putMemberRoles)
 							r.Post("/workspaces", api.postWorkspacesByOrganization)
+							r.Post("/workspaceprebuilds", api.postWorkspacePrebuilds)
+							r.Route("/workspaceprebuild/{prebuildname}", func(r chi.Router) {
+								r.Use(httpmw.ExtractWorkspacePrebuildParam(options.Database))
+							})
 						})
 					})
 				})

@@ -1663,6 +1663,13 @@ func (m metricsStore) GetWorkspaces(ctx context.Context, arg database.GetWorkspa
 	return workspaces, err
 }
 
+func (m metricsStore) GetWorkspacesByPrebuildID(ctx context.Context, id uuid.UUID) ([]database.Workspace, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetWorkspacesByPrebuildID(ctx, id)
+	m.queryLatencies.WithLabelValues("GetWorkspacesByPrebuildID").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.Workspace, error) {
 	start := time.Now()
 	workspaces, err := m.s.GetWorkspacesEligibleForTransition(ctx, now)

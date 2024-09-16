@@ -2719,6 +2719,10 @@ func (q *querier) GetWorkspaces(ctx context.Context, arg database.GetWorkspacesP
 	return q.db.GetAuthorizedWorkspaces(ctx, arg, prep)
 }
 
+func (q *querier) GetWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacesByPrebuildID)(ctx, prebuildID)
+}
+
 func (q *querier) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.Workspace, error) {
 	return q.db.GetWorkspacesEligibleForTransition(ctx, now)
 }

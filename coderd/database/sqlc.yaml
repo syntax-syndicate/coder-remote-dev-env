@@ -76,6 +76,9 @@ sql:
           - column: "provisioner_job_stats.*_secs"
             go_type:
               type: "float64"
+          - column: "workspace_prebuilds.replicas"
+            go_type:
+              type: "int"
         rename:
           group_member: GroupMemberTable
           group_members_expanded: GroupMember

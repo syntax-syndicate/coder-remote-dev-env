@@ -18,3 +18,6 @@ SELECT * FROM workspace_prebuilds WHERE id = @id;
 
 -- name: GetWorkspacePrebuildParameters :many
 SELECT * FROM workspace_prebuild_parameters WHERE workspace_prebuild_id = $1;
+
+-- name: GetWorkspacesByPrebuildID :many
+SELECT * FROM workspaces WHERE prebuild_id = @id::uuid; -- to enforce non-nullable ID

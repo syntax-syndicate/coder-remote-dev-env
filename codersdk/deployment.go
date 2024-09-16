@@ -2897,13 +2897,14 @@ const (
 	ExperimentCustomRoles        Experiment = "custom-roles"         // Allows creating runtime custom roles.
 	ExperimentNotifications      Experiment = "notifications"        // Sends notifications via SMTP and webhooks following certain events.
 	ExperimentWorkspaceUsage     Experiment = "workspace-usage"      // Enables the new workspace usage tracking.
+	ExperimentWorkspacePrebuilds Experiment = "workspace-prebuilds"  // Provision workspaces asynchronously to speed up workspace creation.
 )
 
 // ExperimentsAll should include all experiments that are safe for
 // users to opt-in to via --experimental='*'.
 // Experiments that are not ready for consumption by all users should
 // not be included here and will be essentially hidden.
-var ExperimentsAll = Experiments{ExperimentNotifications}
+var ExperimentsAll = Experiments{ExperimentNotifications, ExperimentWorkspacePrebuilds}
 
 // Experiments is a list of experiments.
 // Multiple experiments may be enabled at the same time.

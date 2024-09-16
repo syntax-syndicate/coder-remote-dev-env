@@ -3,6 +3,7 @@ package workspaceprebuilds
 import (
 	"context"
 
+	"cdr.dev/slog"
 	"github.com/google/uuid"
 	"golang.org/x/xerrors"
 
@@ -10,19 +11,9 @@ import (
 	"github.com/coder/coder/v2/codersdk"
 )
 
-// TODO:
-//		-> parameter matching arithmetic
-//		-> pubsub notifications
-
-type Store interface {
-	GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error)
-	GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error)
-	GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuild, error)
-	UpsertWorkspacePrebuild(ctx context.Context, arg database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error)
-}
-
 // CreateNewWorkspacePrebuild creates a new workspace prebuild in the database and triggers the workspace builds.
-func CreateNewWorkspacePrebuild(ctx context.Context, store Store, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuild, error) {
+// TODO: parameter matching arithmetic when creating new workspace which may match pubsub definition
+func (m Coordinator) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuild, error) {
 	// TODO: auditing
 	// TODO: trigger workspace builds
 
@@ -32,10 +23,10 @@ func CreateNewWorkspacePrebuild(ctx context.Context, store Store, req codersdk.C
 		return nil, xerrors.Errorf("prebuild creation requires a CreatedBy value")
 	}
 
-	pb, err := store.UpsertWorkspacePrebuild(ctx, database.UpsertWorkspacePrebuildParams{
+	pb, err := m.store.UpsertWorkspacePrebuild(ctx, database.UpsertWorkspacePrebuildParams{
 		ID:                uuid.New(),
 		Name:              req.Name,
-		Replicas:          int32(req.Replicas),
+		Replicas:          req.Replicas,
 		OrganizationID:    req.OrganizationID,
 		TemplateID:        req.TemplateID,
 		TemplateVersionID: req.TemplateVersionID,
@@ -45,17 +36,11 @@ func CreateNewWorkspacePrebuild(ctx context.Context, store Store, req codersdk.C
 		return nil, err
 	}
 
-	return &pb, nil
-}
+	if err = m.pubsub.Publish(PrebuildCreatedChannel(), []byte(pb.ID.String())); err != nil {
+		m.logger.Warn(ctx, "failed to publish prebuild creation message", slog.F("prebuild_id", pb.ID.String()))
+	}
 
-// ReconcileState reads the current state of a prebuild and attempts to reconcile it against its definition.
-func ReconcileState(ctx context.Context, prebuildID uuid.UUID) error {
-	// fetch prebuild
-	// check if has desired number of replicas
-	//		if not, schedule workspace builds
-	// check if template has changed -> trigger update of workspaces
-	// check if any associated (unassigned) workspaces are in a failed state, attempt to restart them and only do this 5x before logging error.
-	return nil
+	return &pb, nil
 }
 
 // Refresh will run a new Plan operation on all workspaces associated to the given prebuild in order to see if the associated

@@ -6,7 +6,6 @@ import (
 	"github.com/coder/coder/v2/coderd/database/db2sdk"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
-	"github.com/coder/coder/v2/coderd/workspaceprebuilds"
 	"github.com/coder/coder/v2/codersdk"
 )
 
@@ -24,7 +23,7 @@ func (api *API) postWorkspacePrebuilds(rw http.ResponseWriter, r *http.Request) 
 	createPrebuild.CreatedBy = apiKey.UserID
 	createPrebuild.OrganizationID = org.ID
 
-	pb, err := workspaceprebuilds.CreateNewWorkspacePrebuild(ctx, api.Database, createPrebuild)
+	pb, err := api.PrebuildsCoordinator.CreateNewWorkspacePrebuild(ctx, createPrebuild)
 	if err != nil || pb == nil {
 		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
 			Message: "Internal error creating workspace prebuild.",

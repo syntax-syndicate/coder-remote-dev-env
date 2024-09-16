@@ -3488,6 +3488,21 @@ func (mr *MockStoreMockRecorder) GetWorkspaces(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspaces", reflect.TypeOf((*MockStore)(nil).GetWorkspaces), arg0, arg1)
 }
 
+// GetWorkspacesByPrebuildID mocks base method.
+func (m *MockStore) GetWorkspacesByPrebuildID(arg0 context.Context, arg1 uuid.UUID) ([]database.Workspace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkspacesByPrebuildID", arg0, arg1)
+	ret0, _ := ret[0].([]database.Workspace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkspacesByPrebuildID indicates an expected call of GetWorkspacesByPrebuildID.
+func (mr *MockStoreMockRecorder) GetWorkspacesByPrebuildID(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacesByPrebuildID", reflect.TypeOf((*MockStore)(nil).GetWorkspacesByPrebuildID), arg0, arg1)
+}
+
 // GetWorkspacesEligibleForTransition mocks base method.
 func (m *MockStore) GetWorkspacesEligibleForTransition(arg0 context.Context, arg1 time.Time) ([]database.Workspace, error) {
 	m.ctrl.T.Helper()

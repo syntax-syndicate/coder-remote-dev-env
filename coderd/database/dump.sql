@@ -1911,6 +1911,9 @@ ALTER TABLE ONLY workspace_prebuild_parameters
     ADD CONSTRAINT workspace_prebuild_parameters_pkey PRIMARY KEY (workspace_prebuild_id, name);
 
 ALTER TABLE ONLY workspace_prebuilds
+    ADD CONSTRAINT workspace_prebuilds_name_key UNIQUE (name);
+
+ALTER TABLE ONLY workspace_prebuilds
     ADD CONSTRAINT workspace_prebuilds_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY workspace_proxies

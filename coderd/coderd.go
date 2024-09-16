@@ -43,6 +43,7 @@ import (
 	"github.com/coder/coder/v2/coderd/entitlements"
 	"github.com/coder/coder/v2/coderd/idpsync"
 	"github.com/coder/coder/v2/coderd/runtimeconfig"
+	"github.com/coder/coder/v2/coderd/workspaceprebuilds"
 
 	agentproto "github.com/coder/coder/v2/agent/proto"
 	"github.com/coder/coder/v2/buildinfo"
@@ -248,6 +249,9 @@ type Options struct {
 
 	// IDPSync holds all configured values for syncing external IDP users into Coder.
 	IDPSync idpsync.IDPSync
+
+	// PrebuildsCoordinator is responsible for creating and maintaining workspace prebuilds.
+	PrebuildsCoordinator workspaceprebuilds.Coordinator
 }
 
 // @title Coder API

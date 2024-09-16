@@ -3001,7 +3001,7 @@ type WorkspaceBuildTable struct {
 type WorkspacePrebuild struct {
 	ID                uuid.UUID     `db:"id" json:"id"`
 	Name              string        `db:"name" json:"name"`
-	Replicas          int32         `db:"replicas" json:"replicas"`
+	Replicas          int           `db:"replicas" json:"replicas"`
 	OrganizationID    uuid.UUID     `db:"organization_id" json:"organization_id"`
 	TemplateID        uuid.UUID     `db:"template_id" json:"template_id"`
 	TemplateVersionID uuid.UUID     `db:"template_version_id" json:"template_version_id"`

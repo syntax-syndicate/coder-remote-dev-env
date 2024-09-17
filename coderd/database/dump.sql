@@ -1574,12 +1574,6 @@ CREATE VIEW workspace_build_with_user AS
 
 COMMENT ON VIEW workspace_build_with_user IS 'Joins in the username + avatar url of the initiated by user.';
 
-CREATE TABLE workspace_prebuild_parameters (
-    workspace_prebuild_id uuid NOT NULL,
-    name text NOT NULL,
-    value text NOT NULL
-);
-
 CREATE TABLE workspace_prebuilds (
     id uuid NOT NULL,
     name text NOT NULL,
@@ -1587,6 +1581,7 @@ CREATE TABLE workspace_prebuilds (
     organization_id uuid NOT NULL,
     template_id uuid NOT NULL,
     template_version_id uuid NOT NULL,
+    parameters jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_by uuid,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
@@ -1906,9 +1901,6 @@ ALTER TABLE ONLY workspace_builds
 
 ALTER TABLE ONLY workspace_builds
     ADD CONSTRAINT workspace_builds_workspace_id_build_number_key UNIQUE (workspace_id, build_number);
-
-ALTER TABLE ONLY workspace_prebuild_parameters
-    ADD CONSTRAINT workspace_prebuild_parameters_pkey PRIMARY KEY (workspace_prebuild_id, name);
 
 ALTER TABLE ONLY workspace_prebuilds
     ADD CONSTRAINT workspace_prebuilds_name_key UNIQUE (name);
@@ -2285,9 +2277,6 @@ ALTER TABLE ONLY workspace_builds
 
 ALTER TABLE ONLY workspace_builds
     ADD CONSTRAINT workspace_builds_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE;
-
-ALTER TABLE ONLY workspace_prebuild_parameters
-    ADD CONSTRAINT workspace_prebuild_parameters_workspace_prebuild_id_fkey FOREIGN KEY (workspace_prebuild_id) REFERENCES workspaces(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY workspace_prebuilds
     ADD CONSTRAINT workspace_prebuilds_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;

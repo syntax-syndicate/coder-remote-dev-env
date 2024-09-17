@@ -1598,6 +1598,21 @@ func (mr *MockStoreMockRecorder) GetLogoURL(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLogoURL", reflect.TypeOf((*MockStore)(nil).GetLogoURL), arg0)
 }
 
+// GetMatchingPrebuilds mocks base method.
+func (m *MockStore) GetMatchingPrebuilds(arg0 context.Context, arg1 database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMatchingPrebuilds", arg0, arg1)
+	ret0, _ := ret[0].([]database.WorkspacePrebuild)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMatchingPrebuilds indicates an expected call of GetMatchingPrebuilds.
+func (mr *MockStoreMockRecorder) GetMatchingPrebuilds(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMatchingPrebuilds", reflect.TypeOf((*MockStore)(nil).GetMatchingPrebuilds), arg0, arg1)
+}
+
 // GetNotificationMessagesByStatus mocks base method.
 func (m *MockStore) GetNotificationMessagesByStatus(arg0 context.Context, arg1 database.GetNotificationMessagesByStatusParams) ([]database.NotificationMessage, error) {
 	m.ctrl.T.Helper()
@@ -3276,21 +3291,6 @@ func (m *MockStore) GetWorkspacePrebuildByID(arg0 context.Context, arg1 uuid.UUI
 func (mr *MockStoreMockRecorder) GetWorkspacePrebuildByID(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacePrebuildByID", reflect.TypeOf((*MockStore)(nil).GetWorkspacePrebuildByID), arg0, arg1)
-}
-
-// GetWorkspacePrebuildParameters mocks base method.
-func (m *MockStore) GetWorkspacePrebuildParameters(arg0 context.Context, arg1 uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetWorkspacePrebuildParameters", arg0, arg1)
-	ret0, _ := ret[0].([]database.WorkspacePrebuildParameter)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetWorkspacePrebuildParameters indicates an expected call of GetWorkspacePrebuildParameters.
-func (mr *MockStoreMockRecorder) GetWorkspacePrebuildParameters(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacePrebuildParameters", reflect.TypeOf((*MockStore)(nil).GetWorkspacePrebuildParameters), arg0, arg1)
 }
 
 // GetWorkspacePrebuilds mocks base method.

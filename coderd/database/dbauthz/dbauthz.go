@@ -1632,6 +1632,10 @@ func (q *querier) GetLogoURL(ctx context.Context) (string, error) {
 	return q.db.GetLogoURL(ctx)
 }
 
+func (q *querier) GetMatchingPrebuilds(ctx context.Context, arg database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
+	panic("not implemented")
+}
+
 func (q *querier) GetNotificationMessagesByStatus(ctx context.Context, arg database.GetNotificationMessagesByStatusParams) ([]database.NotificationMessage, error) {
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
 		return nil, err
@@ -2578,10 +2582,6 @@ func (q *querier) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceApp
 
 func (q *querier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
 	return fetch(q.log, q.auth, q.db.GetWorkspacePrebuildByID)(ctx, id)
-}
-
-func (q *querier) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
-	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacePrebuildParameters)(ctx, workspacePrebuildID)
 }
 
 func (q *querier) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuild, error) {

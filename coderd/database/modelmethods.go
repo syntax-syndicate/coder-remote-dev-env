@@ -1,12 +1,14 @@
 package database
 
 import (
+	"encoding/json"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 	"golang.org/x/oauth2"
 	"golang.org/x/xerrors"
 
@@ -310,10 +312,6 @@ func (p WorkspacePrebuild) RBACObject() rbac.Object {
 	return rbac.ResourceWorkspacePrebuild.WithID(p.ID).InOrg(p.OrganizationID)
 }
 
-func (p WorkspacePrebuildParameter) RBACObject() rbac.Object {
-	return rbac.ResourceWorkspacePrebuild.WithID(p.WorkspacePrebuildID)
-}
-
 type WorkspaceAgentConnectionStatus struct {
 	Status           WorkspaceAgentStatus `json:"status"`
 	FirstConnectedAt *time.Time           `json:"first_connected_at"`
@@ -459,4 +457,28 @@ func (r GetAuthorizationUserRolesRow) RoleNames() ([]rbac.RoleIdentifier, error)
 
 func (k CryptoKey) ExpiresAt(keyDuration time.Duration) time.Time {
 	return k.StartsAt.Add(keyDuration).UTC()
+}
+
+type WorkspacePrebuildParameter struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type WorkspacePrebuildParameters []WorkspacePrebuildParameter
+
+func (p WorkspacePrebuild) ParamList() (WorkspacePrebuildParameters, error) {
+	var list WorkspacePrebuildParameters
+	return list, json.Unmarshal(p.Parameters, &list)
+}
+
+func (p WorkspacePrebuildParameters) Sort() {
+	slices.SortFunc(p, func(a, b WorkspacePrebuildParameter) int {
+		if a.Name == b.Name {
+			return 0
+		}
+		if a.Name < b.Name {
+			return -1
+		}
+		return +1
+	})
 }

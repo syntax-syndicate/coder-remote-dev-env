@@ -11,6 +11,7 @@ import (
 // ReconcileState reads the current state of a prebuild and attempts to reconcile it against its definition.
 func (m Coordinator) ReconcileState(ctx context.Context, prebuildID uuid.UUID) error {
 	// TODO: add exclusive advisory lock in database to prevent replicas from performing the same action.
+	// TODO: validate that all required params are set if template changes.
 
 	// fetch prebuild
 	// check if has desired number of replicas

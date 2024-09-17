@@ -795,6 +795,13 @@ func (m metricsStore) GetLogoURL(ctx context.Context) (string, error) {
 	return url, err
 }
 
+func (m metricsStore) GetMatchingPrebuilds(ctx context.Context, arg database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetMatchingPrebuilds(ctx, arg)
+	m.queryLatencies.WithLabelValues("GetMatchingPrebuilds").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetNotificationMessagesByStatus(ctx context.Context, arg database.GetNotificationMessagesByStatusParams) ([]database.NotificationMessage, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetNotificationMessagesByStatus(ctx, arg)
@@ -1562,13 +1569,6 @@ func (m metricsStore) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID
 	start := time.Now()
 	r0, r1 := m.s.GetWorkspacePrebuildByID(ctx, id)
 	m.queryLatencies.WithLabelValues("GetWorkspacePrebuildByID").Observe(time.Since(start).Seconds())
-	return r0, r1
-}
-
-func (m metricsStore) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
-	start := time.Now()
-	r0, r1 := m.s.GetWorkspacePrebuildParameters(ctx, workspacePrebuildID)
-	m.queryLatencies.WithLabelValues("GetWorkspacePrebuildParameters").Observe(time.Since(start).Seconds())
 	return r0, r1
 }
 

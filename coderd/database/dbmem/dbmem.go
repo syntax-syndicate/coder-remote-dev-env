@@ -3156,6 +3156,15 @@ func (q *FakeQuerier) GetLogoURL(_ context.Context) (string, error) {
 	return q.logoURL, nil
 }
 
+func (q *FakeQuerier) GetMatchingPrebuilds(ctx context.Context, arg database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
+	err := validateDatabaseType(arg)
+	if err != nil {
+		return nil, err
+	}
+
+	panic("not implemented")
+}
+
 func (q *FakeQuerier) GetNotificationMessagesByStatus(_ context.Context, arg database.GetNotificationMessagesByStatusParams) ([]database.NotificationMessage, error) {
 	err := validateDatabaseType(arg)
 	if err != nil {
@@ -6510,10 +6519,6 @@ func (q *FakeQuerier) GetWorkspaceByWorkspaceAppID(_ context.Context, workspaceA
 }
 
 func (q *FakeQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
-	panic("not implemented")
-}
-
-func (q *FakeQuerier) GetWorkspacePrebuildParameters(ctx context.Context, workspacePrebuildID uuid.UUID) ([]database.WorkspacePrebuildParameter, error) {
 	panic("not implemented")
 }
 

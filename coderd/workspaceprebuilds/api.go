@@ -16,6 +16,7 @@ import (
 func (m Coordinator) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuild, error) {
 	// TODO: auditing
 	// TODO: trigger workspace builds
+	// TODO: validate required params are set
 
 	// This field is nullable so that it can be set to NULL when the user who created the prebuild is deleted.
 	// However, we should always enforce that this is set initially.

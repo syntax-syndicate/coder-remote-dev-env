@@ -660,11 +660,11 @@ func Organization(organization database.Organization) codersdk.Organization {
 	}
 }
 
-func WorkspacePrebuild(pb database.WorkspacePrebuild) codersdk.WorkspacePrebuild {
-	return codersdk.WorkspacePrebuild{
+func WorkspacePrebuildPool(pb database.WorkspacePrebuildPool) codersdk.WorkspacePrebuildPool {
+	return codersdk.WorkspacePrebuildPool{
 		ID:                pb.ID,
 		Name:              pb.Name,
-		Replicas:          pb.Replicas,
+		Count:             pb.Count,
 		OrganizationID:    pb.OrganizationID,
 		TemplateID:        pb.TemplateID,
 		TemplateVersionID: pb.TemplateVersionID,

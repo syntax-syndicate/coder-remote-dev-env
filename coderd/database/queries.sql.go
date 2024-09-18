@@ -13912,28 +13912,29 @@ func (q *sqlQuerier) UpdateWorkspaceBuildProvisionerStateByID(ctx context.Contex
 }
 
 const getMatchingPrebuilds = `-- name: GetMatchingPrebuilds :many
-SELECT id, name, replicas, organization_id, template_id, template_version_id, parameters, created_by, created_at, updated_at
-FROM workspace_prebuilds
+SELECT id, name, count, organization_id, template_id, template_version_id, parameters, ignored_parameters, created_by, created_at, updated_at
+FROM workspace_prebuild_pool
 WHERE template_version_id = $1
 `
 
-func (q *sqlQuerier) GetMatchingPrebuilds(ctx context.Context, templateVersionID uuid.UUID) ([]WorkspacePrebuild, error) {
+func (q *sqlQuerier) GetMatchingPrebuilds(ctx context.Context, templateVersionID uuid.UUID) ([]WorkspacePrebuildPool, error) {
 	rows, err := q.db.QueryContext(ctx, getMatchingPrebuilds, templateVersionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WorkspacePrebuild
+	var items []WorkspacePrebuildPool
 	for rows.Next() {
-		var i WorkspacePrebuild
+		var i WorkspacePrebuildPool
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.Replicas,
+			&i.Count,
 			&i.OrganizationID,
 			&i.TemplateID,
 			&i.TemplateVersionID,
 			&i.Parameters,
+			pq.Array(&i.IgnoredParameters),
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -13951,78 +13952,38 @@ func (q *sqlQuerier) GetMatchingPrebuilds(ctx context.Context, templateVersionID
 	return items, nil
 }
 
-const getWorkspacePrebuildByID = `-- name: GetWorkspacePrebuildByID :one
-SELECT id, name, replicas, organization_id, template_id, template_version_id, parameters, created_by, created_at, updated_at
-FROM workspace_prebuilds
-WHERE id = $1
+const getUnassignedWorkspacesByPrebuildID = `-- name: GetUnassignedWorkspacesByPrebuildID :many
+
+SELECT w.id, w.created_at, w.updated_at, w.owner_id, w.organization_id, w.template_id, w.deleted, w.name, w.autostart_schedule, w.ttl, w.last_used_at, w.dormant_at, w.deleting_at, w.automatic_updates, w.favorite, w.prebuild_id, w.prebuild_assigned
+FROM workspace_prebuild_pool wpp
+         INNER JOIN workspaces w ON wpp.id = w.prebuild_id
+         INNER JOIN LATERAL (
+    SELECT wb.transition
+    FROM workspace_builds wb
+             LEFT JOIN provisioner_jobs pj ON pj.id = wb.job_id
+    WHERE wb.workspace_id = w.id
+      -- we only consider workspaces which are fully built
+      AND pj.completed_at IS NOT NULL
+      AND pj.canceled_at IS NULL
+      AND pj.error IS NULL
+    ORDER BY build_number DESC
+    LIMIT 1
+    ) latest_build ON TRUE
+WHERE w.deleted = false
+  AND w.prebuild_id = $1::uuid
+  AND w.prebuild_assigned = false
+GROUP BY latest_build.transition, w.id
 `
 
-func (q *sqlQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (WorkspacePrebuild, error) {
-	row := q.db.QueryRowContext(ctx, getWorkspacePrebuildByID, id)
-	var i WorkspacePrebuild
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Replicas,
-		&i.OrganizationID,
-		&i.TemplateID,
-		&i.TemplateVersionID,
-		&i.Parameters,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getWorkspacePrebuilds = `-- name: GetWorkspacePrebuilds :many
-SELECT id, name, replicas, organization_id, template_id, template_version_id, parameters, created_by, created_at, updated_at
-FROM workspace_prebuilds
-`
-
-func (q *sqlQuerier) GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuild, error) {
-	rows, err := q.db.QueryContext(ctx, getWorkspacePrebuilds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []WorkspacePrebuild
-	for rows.Next() {
-		var i WorkspacePrebuild
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Replicas,
-			&i.OrganizationID,
-			&i.TemplateID,
-			&i.TemplateVersionID,
-			&i.Parameters,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getWorkspacesByPrebuildID = `-- name: GetWorkspacesByPrebuildID :many
-SELECT id, created_at, updated_at, owner_id, organization_id, template_id, deleted, name, autostart_schedule, ttl, last_used_at, dormant_at, deleting_at, automatic_updates, favorite, prebuild_id, prebuild_assigned
-FROM workspaces
-WHERE prebuild_id = $1::uuid AND deleted = false AND prebuild_assigned = false
-`
-
-// TODO: rename to GetUnassigned...
-func (q *sqlQuerier) GetWorkspacesByPrebuildID(ctx context.Context, id uuid.UUID) ([]Workspace, error) {
-	rows, err := q.db.QueryContext(ctx, getWorkspacesByPrebuildID, id)
+// TODO: add query to fetch pending builds
+//
+// TODO: create view for latest build!!
+//
+// we only consider workspaces which are not deleted, unassigned, and in a "stop" state
+//
+//	AND latest_build.transition = 'stop'::workspace_transition -- TODO: restore this once workspaces are stopped after successful prebuild boot
+func (q *sqlQuerier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error) {
+	rows, err := q.db.QueryContext(ctx, getUnassignedWorkspacesByPrebuildID, prebuildID)
 	if err != nil {
 		return nil, err
 	}
@@ -14062,8 +14023,75 @@ func (q *sqlQuerier) GetWorkspacesByPrebuildID(ctx context.Context, id uuid.UUID
 	return items, nil
 }
 
+const getWorkspacePrebuildByID = `-- name: GetWorkspacePrebuildByID :one
+SELECT id, name, count, organization_id, template_id, template_version_id, parameters, ignored_parameters, created_by, created_at, updated_at
+FROM workspace_prebuild_pool
+WHERE id = $1
+`
+
+func (q *sqlQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (WorkspacePrebuildPool, error) {
+	row := q.db.QueryRowContext(ctx, getWorkspacePrebuildByID, id)
+	var i WorkspacePrebuildPool
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Count,
+		&i.OrganizationID,
+		&i.TemplateID,
+		&i.TemplateVersionID,
+		&i.Parameters,
+		pq.Array(&i.IgnoredParameters),
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getWorkspacePrebuilds = `-- name: GetWorkspacePrebuilds :many
+SELECT id, name, count, organization_id, template_id, template_version_id, parameters, ignored_parameters, created_by, created_at, updated_at
+FROM workspace_prebuild_pool
+`
+
+func (q *sqlQuerier) GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuildPool, error) {
+	rows, err := q.db.QueryContext(ctx, getWorkspacePrebuilds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WorkspacePrebuildPool
+	for rows.Next() {
+		var i WorkspacePrebuildPool
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Count,
+			&i.OrganizationID,
+			&i.TemplateID,
+			&i.TemplateVersionID,
+			&i.Parameters,
+			pq.Array(&i.IgnoredParameters),
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markWorkspacePrebuildAssigned = `-- name: MarkWorkspacePrebuildAssigned :exec
-UPDATE workspaces SET prebuild_assigned = true WHERE id = $1
+UPDATE workspaces
+SET prebuild_assigned = true
+WHERE id = $1
 `
 
 func (q *sqlQuerier) MarkWorkspacePrebuildAssigned(ctx context.Context, id uuid.UUID) error {
@@ -14071,48 +14099,49 @@ func (q *sqlQuerier) MarkWorkspacePrebuildAssigned(ctx context.Context, id uuid.
 	return err
 }
 
-const upsertWorkspacePrebuild = `-- name: UpsertWorkspacePrebuild :one
-INSERT INTO workspace_prebuilds (id, name, replicas, organization_id, template_id, template_version_id, created_by)
+const upsertWorkspacePrebuildPool = `-- name: UpsertWorkspacePrebuildPool :one
+INSERT INTO workspace_prebuild_pool (id, name, count, organization_id, template_id, template_version_id, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE
     SET name                = $2,
-        replicas            = $3,
+        count               = $3,
         organization_id     = $4,
         template_id         = $5,
         template_version_id = $6,
         created_by          = $7
-RETURNING id, name, replicas, organization_id, template_id, template_version_id, parameters, created_by, created_at, updated_at
+RETURNING id, name, count, organization_id, template_id, template_version_id, parameters, ignored_parameters, created_by, created_at, updated_at
 `
 
-type UpsertWorkspacePrebuildParams struct {
+type UpsertWorkspacePrebuildPoolParams struct {
 	ID                uuid.UUID     `db:"id" json:"id"`
 	Name              string        `db:"name" json:"name"`
-	Replicas          int           `db:"replicas" json:"replicas"`
+	Count             int           `db:"count" json:"count"`
 	OrganizationID    uuid.UUID     `db:"organization_id" json:"organization_id"`
 	TemplateID        uuid.UUID     `db:"template_id" json:"template_id"`
 	TemplateVersionID uuid.UUID     `db:"template_version_id" json:"template_version_id"`
 	CreatedBy         uuid.NullUUID `db:"created_by" json:"created_by"`
 }
 
-func (q *sqlQuerier) UpsertWorkspacePrebuild(ctx context.Context, arg UpsertWorkspacePrebuildParams) (WorkspacePrebuild, error) {
-	row := q.db.QueryRowContext(ctx, upsertWorkspacePrebuild,
+func (q *sqlQuerier) UpsertWorkspacePrebuildPool(ctx context.Context, arg UpsertWorkspacePrebuildPoolParams) (WorkspacePrebuildPool, error) {
+	row := q.db.QueryRowContext(ctx, upsertWorkspacePrebuildPool,
 		arg.ID,
 		arg.Name,
-		arg.Replicas,
+		arg.Count,
 		arg.OrganizationID,
 		arg.TemplateID,
 		arg.TemplateVersionID,
 		arg.CreatedBy,
 	)
-	var i WorkspacePrebuild
+	var i WorkspacePrebuildPool
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Replicas,
+		&i.Count,
 		&i.OrganizationID,
 		&i.TemplateID,
 		&i.TemplateVersionID,
 		&i.Parameters,
+		pq.Array(&i.IgnoredParameters),
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,

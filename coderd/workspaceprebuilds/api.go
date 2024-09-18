@@ -13,7 +13,7 @@ import (
 
 // CreateNewWorkspacePrebuild creates a new workspace prebuild in the database and triggers the workspace builds.
 // TODO: parameter matching arithmetic when creating new workspace which may match pubsub definition
-func (m Controller) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuild, error) {
+func (m Controller) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuildPool, error) {
 	// TODO: auditing
 	// TODO: trigger workspace builds
 	// TODO: validate required params are set
@@ -24,10 +24,10 @@ func (m Controller) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk
 		return nil, xerrors.Errorf("prebuild creation requires a CreatedBy value")
 	}
 
-	pb, err := m.store.UpsertWorkspacePrebuild(ctx, database.UpsertWorkspacePrebuildParams{
+	pb, err := m.store.UpsertWorkspacePrebuildPool(ctx, database.UpsertWorkspacePrebuildPoolParams{
 		ID:                uuid.New(),
 		Name:              req.Name,
-		Replicas:          req.Replicas,
+		Count:             req.Count,
 		OrganizationID:    req.OrganizationID,
 		TemplateID:        req.TemplateID,
 		TemplateVersionID: req.TemplateVersionID,

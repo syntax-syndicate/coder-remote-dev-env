@@ -307,7 +307,7 @@ func (a GetOAuth2ProviderAppsByUserIDRow) RBACObject() rbac.Object {
 	return a.OAuth2ProviderApp.RBACObject()
 }
 
-func (p WorkspacePrebuild) RBACObject() rbac.Object {
+func (p WorkspacePrebuildPool) RBACObject() rbac.Object {
 	// We do not specify WithOwner here since prebuilds will be a shared resource across owners & org template admins.
 	return rbac.ResourceWorkspacePrebuild.WithID(p.ID).InOrg(p.OrganizationID)
 }
@@ -466,7 +466,7 @@ type WorkspacePrebuildParameter struct {
 
 type WorkspacePrebuildParameters []WorkspacePrebuildParameter
 
-func (p WorkspacePrebuild) ParamList() (WorkspacePrebuildParameters, error) {
+func (p WorkspacePrebuildPool) ParamList() (WorkspacePrebuildParameters, error) {
 	var list WorkspacePrebuildParameters
 	return list, json.Unmarshal(p.Parameters, &list)
 }

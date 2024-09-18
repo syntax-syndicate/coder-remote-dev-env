@@ -795,7 +795,7 @@ func (m metricsStore) GetLogoURL(ctx context.Context) (string, error) {
 	return url, err
 }
 
-func (m metricsStore) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuild, error) {
+func (m metricsStore) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuildPool, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetMatchingPrebuilds(ctx, arg)
 	m.queryLatencies.WithLabelValues("GetMatchingPrebuilds").Observe(time.Since(start).Seconds())
@@ -1257,6 +1257,13 @@ func (m metricsStore) GetTemplatesWithFilter(ctx context.Context, arg database.G
 	return templates, err
 }
 
+func (m metricsStore) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetUnassignedWorkspacesByPrebuildID(ctx, prebuildID)
+	m.queryLatencies.WithLabelValues("GetUnassignedWorkspacesByPrebuildID").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetUnexpiredLicenses(ctx context.Context) ([]database.License, error) {
 	start := time.Now()
 	licenses, err := m.s.GetUnexpiredLicenses(ctx)
@@ -1565,14 +1572,14 @@ func (m metricsStore) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspac
 	return workspace, err
 }
 
-func (m metricsStore) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
+func (m metricsStore) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuildPool, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetWorkspacePrebuildByID(ctx, id)
 	m.queryLatencies.WithLabelValues("GetWorkspacePrebuildByID").Observe(time.Since(start).Seconds())
 	return r0, r1
 }
 
-func (m metricsStore) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuild, error) {
+func (m metricsStore) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuildPool, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetWorkspacePrebuilds(ctx)
 	m.queryLatencies.WithLabelValues("GetWorkspacePrebuilds").Observe(time.Since(start).Seconds())
@@ -1661,13 +1668,6 @@ func (m metricsStore) GetWorkspaces(ctx context.Context, arg database.GetWorkspa
 	workspaces, err := m.s.GetWorkspaces(ctx, arg)
 	m.queryLatencies.WithLabelValues("GetWorkspaces").Observe(time.Since(start).Seconds())
 	return workspaces, err
-}
-
-func (m metricsStore) GetWorkspacesByPrebuildID(ctx context.Context, id uuid.UUID) ([]database.Workspace, error) {
-	start := time.Now()
-	r0, r1 := m.s.GetWorkspacesByPrebuildID(ctx, id)
-	m.queryLatencies.WithLabelValues("GetWorkspacesByPrebuildID").Observe(time.Since(start).Seconds())
-	return r0, r1
 }
 
 func (m metricsStore) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.Workspace, error) {
@@ -2692,10 +2692,10 @@ func (m metricsStore) UpsertWorkspaceAgentPortShare(ctx context.Context, arg dat
 	return r0, r1
 }
 
-func (m metricsStore) UpsertWorkspacePrebuild(ctx context.Context, arg database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error) {
+func (m metricsStore) UpsertWorkspacePrebuildPool(ctx context.Context, arg database.UpsertWorkspacePrebuildPoolParams) (database.WorkspacePrebuildPool, error) {
 	start := time.Now()
-	r0, r1 := m.s.UpsertWorkspacePrebuild(ctx, arg)
-	m.queryLatencies.WithLabelValues("UpsertWorkspacePrebuild").Observe(time.Since(start).Seconds())
+	r0, r1 := m.s.UpsertWorkspacePrebuildPool(ctx, arg)
+	m.queryLatencies.WithLabelValues("UpsertWorkspacePrebuildPool").Observe(time.Since(start).Seconds())
 	return r0, r1
 }
 

@@ -1632,7 +1632,7 @@ func (q *querier) GetLogoURL(ctx context.Context) (string, error) {
 	return q.db.GetLogoURL(ctx)
 }
 
-func (q *querier) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuild, error) {
+func (q *querier) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuildPool, error) {
 	// TODO: auth
 	return q.db.GetMatchingPrebuilds(ctx, arg)
 }
@@ -2207,6 +2207,13 @@ func (q *querier) GetTemplatesWithFilter(ctx context.Context, arg database.GetTe
 	return q.db.GetAuthorizedTemplates(ctx, arg, prep)
 }
 
+func (q *querier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	// TODO: auth
+	// Maybe only check org visibility, because all users should be able to read workspace prebuilds since they're about to own one.
+	// return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacesByPrebuildID)(ctx, prebuildID)
+	return q.db.GetUnassignedWorkspacesByPrebuildID(ctx, prebuildID)
+}
+
 func (q *querier) GetUnexpiredLicenses(ctx context.Context) ([]database.License, error) {
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
 		return nil, err
@@ -2581,12 +2588,12 @@ func (q *querier) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceApp
 	return fetch(q.log, q.auth, q.db.GetWorkspaceByWorkspaceAppID)(ctx, workspaceAppID)
 }
 
-func (q *querier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
+func (q *querier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuildPool, error) {
 	return fetch(q.log, q.auth, q.db.GetWorkspacePrebuildByID)(ctx, id)
 }
 
-func (q *querier) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuild, error) {
-	return fetchWithPostFilter(q.auth, policy.ActionRead, func(ctx context.Context, _ interface{}) ([]database.WorkspacePrebuild, error) {
+func (q *querier) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuildPool, error) {
+	return fetchWithPostFilter(q.auth, policy.ActionRead, func(ctx context.Context, _ interface{}) ([]database.WorkspacePrebuildPool, error) {
 		return q.db.GetWorkspacePrebuilds(ctx)
 	})(ctx, nil)
 }
@@ -2718,13 +2725,6 @@ func (q *querier) GetWorkspaces(ctx context.Context, arg database.GetWorkspacesP
 		return nil, xerrors.Errorf("(dev error) prepare sql filter: %w", err)
 	}
 	return q.db.GetAuthorizedWorkspaces(ctx, arg, prep)
-}
-
-func (q *querier) GetWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
-	// TODO: auth
-	// Maybe only check org visibility, because all users should be able to read workspace prebuilds since they're about to own one.
-	// return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacesByPrebuildID)(ctx, prebuildID)
-	return q.db.GetWorkspacesByPrebuildID(ctx, prebuildID)
 }
 
 func (q *querier) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.Workspace, error) {
@@ -4133,11 +4133,11 @@ func (q *querier) UpsertWorkspaceAgentPortShare(ctx context.Context, arg databas
 	return q.db.UpsertWorkspaceAgentPortShare(ctx, arg)
 }
 
-func (q *querier) UpsertWorkspacePrebuild(ctx context.Context, arg database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error) {
+func (q *querier) UpsertWorkspacePrebuildPool(ctx context.Context, arg database.UpsertWorkspacePrebuildPoolParams) (database.WorkspacePrebuildPool, error) {
 	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceWorkspacePrebuild); err != nil {
-		return database.WorkspacePrebuild{}, err
+		return database.WorkspacePrebuildPool{}, err
 	}
-	return q.db.UpsertWorkspacePrebuild(ctx, arg)
+	return q.db.UpsertWorkspacePrebuildPool(ctx, arg)
 }
 
 func (q *querier) GetAuthorizedTemplates(ctx context.Context, arg database.GetTemplatesWithFilterParams, _ rbac.PreparedAuthorized) ([]database.Template, error) {

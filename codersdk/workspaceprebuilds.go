@@ -13,13 +13,13 @@ type CreateWorkspacePrebuildRequest struct {
 	OrganizationID      uuid.UUID                    // Only settable by the API handler.
 	Name                string                       `json:"name" validate:"workspace_prebuild_name,required"`
 	RichParameterValues []WorkspacePrebuildParameter `json:"rich_parameter_values,omitempty"`
-	Replicas            int                          `json:"replicas" validate:"required"`
+	Count               int                          `json:"replicas" validate:"required"`
 }
 
-type WorkspacePrebuild struct {
+type WorkspacePrebuildPool struct {
 	ID                uuid.UUID     `json:"id" format:"uuid"`
 	Name              string        `json:"name"`
-	Replicas          int           `json:"replicas"`
+	Count             int           `json:"count"`
 	OrganizationID    uuid.UUID     `json:"organization_id" format:"uuid"`
 	TemplateID        uuid.UUID     `json:"template_id" format:"uuid"`
 	TemplateVersionID uuid.UUID     `json:"template_version_id" format:"uuid"`

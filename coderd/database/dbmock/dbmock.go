@@ -1599,10 +1599,10 @@ func (mr *MockStoreMockRecorder) GetLogoURL(arg0 any) *gomock.Call {
 }
 
 // GetMatchingPrebuilds mocks base method.
-func (m *MockStore) GetMatchingPrebuilds(arg0 context.Context, arg1 uuid.UUID) ([]database.WorkspacePrebuild, error) {
+func (m *MockStore) GetMatchingPrebuilds(arg0 context.Context, arg1 uuid.UUID) ([]database.WorkspacePrebuildPool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMatchingPrebuilds", arg0, arg1)
-	ret0, _ := ret[0].([]database.WorkspacePrebuild)
+	ret0, _ := ret[0].([]database.WorkspacePrebuildPool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -2618,6 +2618,21 @@ func (mr *MockStoreMockRecorder) GetTemplatesWithFilter(arg0, arg1 any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplatesWithFilter", reflect.TypeOf((*MockStore)(nil).GetTemplatesWithFilter), arg0, arg1)
 }
 
+// GetUnassignedWorkspacesByPrebuildID mocks base method.
+func (m *MockStore) GetUnassignedWorkspacesByPrebuildID(arg0 context.Context, arg1 uuid.UUID) ([]database.Workspace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnassignedWorkspacesByPrebuildID", arg0, arg1)
+	ret0, _ := ret[0].([]database.Workspace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUnassignedWorkspacesByPrebuildID indicates an expected call of GetUnassignedWorkspacesByPrebuildID.
+func (mr *MockStoreMockRecorder) GetUnassignedWorkspacesByPrebuildID(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnassignedWorkspacesByPrebuildID", reflect.TypeOf((*MockStore)(nil).GetUnassignedWorkspacesByPrebuildID), arg0, arg1)
+}
+
 // GetUnexpiredLicenses mocks base method.
 func (m *MockStore) GetUnexpiredLicenses(arg0 context.Context) ([]database.License, error) {
 	m.ctrl.T.Helper()
@@ -3279,10 +3294,10 @@ func (mr *MockStoreMockRecorder) GetWorkspaceByWorkspaceAppID(arg0, arg1 any) *g
 }
 
 // GetWorkspacePrebuildByID mocks base method.
-func (m *MockStore) GetWorkspacePrebuildByID(arg0 context.Context, arg1 uuid.UUID) (database.WorkspacePrebuild, error) {
+func (m *MockStore) GetWorkspacePrebuildByID(arg0 context.Context, arg1 uuid.UUID) (database.WorkspacePrebuildPool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWorkspacePrebuildByID", arg0, arg1)
-	ret0, _ := ret[0].(database.WorkspacePrebuild)
+	ret0, _ := ret[0].(database.WorkspacePrebuildPool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -3294,10 +3309,10 @@ func (mr *MockStoreMockRecorder) GetWorkspacePrebuildByID(arg0, arg1 any) *gomoc
 }
 
 // GetWorkspacePrebuilds mocks base method.
-func (m *MockStore) GetWorkspacePrebuilds(arg0 context.Context) ([]database.WorkspacePrebuild, error) {
+func (m *MockStore) GetWorkspacePrebuilds(arg0 context.Context) ([]database.WorkspacePrebuildPool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWorkspacePrebuilds", arg0)
-	ret0, _ := ret[0].([]database.WorkspacePrebuild)
+	ret0, _ := ret[0].([]database.WorkspacePrebuildPool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -3486,21 +3501,6 @@ func (m *MockStore) GetWorkspaces(arg0 context.Context, arg1 database.GetWorkspa
 func (mr *MockStoreMockRecorder) GetWorkspaces(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspaces", reflect.TypeOf((*MockStore)(nil).GetWorkspaces), arg0, arg1)
-}
-
-// GetWorkspacesByPrebuildID mocks base method.
-func (m *MockStore) GetWorkspacesByPrebuildID(arg0 context.Context, arg1 uuid.UUID) ([]database.Workspace, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetWorkspacesByPrebuildID", arg0, arg1)
-	ret0, _ := ret[0].([]database.Workspace)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetWorkspacesByPrebuildID indicates an expected call of GetWorkspacesByPrebuildID.
-func (mr *MockStoreMockRecorder) GetWorkspacesByPrebuildID(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkspacesByPrebuildID", reflect.TypeOf((*MockStore)(nil).GetWorkspacesByPrebuildID), arg0, arg1)
 }
 
 // GetWorkspacesEligibleForTransition mocks base method.
@@ -5655,19 +5655,19 @@ func (mr *MockStoreMockRecorder) UpsertWorkspaceAgentPortShare(arg0, arg1 any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertWorkspaceAgentPortShare", reflect.TypeOf((*MockStore)(nil).UpsertWorkspaceAgentPortShare), arg0, arg1)
 }
 
-// UpsertWorkspacePrebuild mocks base method.
-func (m *MockStore) UpsertWorkspacePrebuild(arg0 context.Context, arg1 database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error) {
+// UpsertWorkspacePrebuildPool mocks base method.
+func (m *MockStore) UpsertWorkspacePrebuildPool(arg0 context.Context, arg1 database.UpsertWorkspacePrebuildPoolParams) (database.WorkspacePrebuildPool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpsertWorkspacePrebuild", arg0, arg1)
-	ret0, _ := ret[0].(database.WorkspacePrebuild)
+	ret := m.ctrl.Call(m, "UpsertWorkspacePrebuildPool", arg0, arg1)
+	ret0, _ := ret[0].(database.WorkspacePrebuildPool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// UpsertWorkspacePrebuild indicates an expected call of UpsertWorkspacePrebuild.
-func (mr *MockStoreMockRecorder) UpsertWorkspacePrebuild(arg0, arg1 any) *gomock.Call {
+// UpsertWorkspacePrebuildPool indicates an expected call of UpsertWorkspacePrebuildPool.
+func (mr *MockStoreMockRecorder) UpsertWorkspacePrebuildPool(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertWorkspacePrebuild", reflect.TypeOf((*MockStore)(nil).UpsertWorkspacePrebuild), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertWorkspacePrebuildPool", reflect.TypeOf((*MockStore)(nil).UpsertWorkspacePrebuildPool), arg0, arg1)
 }
 
 // Wrappers mocks base method.

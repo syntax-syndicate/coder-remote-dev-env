@@ -2999,14 +2999,15 @@ type WorkspaceBuildTable struct {
 	MaxDeadline       time.Time           `db:"max_deadline" json:"max_deadline"`
 }
 
-type WorkspacePrebuild struct {
+type WorkspacePrebuildPool struct {
 	ID                uuid.UUID       `db:"id" json:"id"`
 	Name              string          `db:"name" json:"name"`
-	Replicas          int             `db:"replicas" json:"replicas"`
+	Count             int             `db:"count" json:"count"`
 	OrganizationID    uuid.UUID       `db:"organization_id" json:"organization_id"`
 	TemplateID        uuid.UUID       `db:"template_id" json:"template_id"`
 	TemplateVersionID uuid.UUID       `db:"template_version_id" json:"template_version_id"`
 	Parameters        json.RawMessage `db:"parameters" json:"parameters"`
+	IgnoredParameters []string        `db:"ignored_parameters" json:"ignored_parameters"`
 	CreatedBy         uuid.NullUUID   `db:"created_by" json:"created_by"`
 	CreatedAt         time.Time       `db:"created_at" json:"created_at"`
 	UpdatedAt         time.Time       `db:"updated_at" json:"updated_at"`

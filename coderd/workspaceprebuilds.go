@@ -32,6 +32,6 @@ func (api *API) postWorkspacePrebuilds(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	apiPb := db2sdk.WorkspacePrebuild(*pb)
+	apiPb := db2sdk.WorkspacePrebuildPool(*pb)
 	httpapi.Write(ctx, rw, http.StatusCreated, apiPb)
 }

@@ -9,10 +9,12 @@ import (
 	"github.com/coder/coder/v2/codersdk"
 )
 
+// TODO: remove?
+
 type workspacePrebuildParamContextKey struct{}
 
-func WorkspacePrebuildParam(r *http.Request) database.WorkspacePrebuild {
-	workspace, ok := r.Context().Value(workspacePrebuildParamContextKey{}).(database.WorkspacePrebuild)
+func WorkspacePrebuildPoolParam(r *http.Request) database.WorkspacePrebuildPool {
+	workspace, ok := r.Context().Value(workspacePrebuildParamContextKey{}).(database.WorkspacePrebuildPool)
 	if !ok {
 		panic("developer error: workspace prebuild param middleware not provided")
 	}

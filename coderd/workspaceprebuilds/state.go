@@ -22,19 +22,21 @@ func (m Controller) ReconcileState(ctx context.Context, prebuildID uuid.UUID) er
 		return xerrors.Errorf("failed to load prebuild by ID %q: %w", prebuildID.String(), err)
 	}
 
-	workspaces, err := m.store.GetWorkspacesByPrebuildID(ctx, prebuildID)
+	// TODO: also check for workspaces which are in a transitionary state (i.e. created but building or failed)
+	workspaces, err := m.store.GetUnassignedWorkspacesByPrebuildID(ctx, prebuildID)
 	if err != nil {
 		return xerrors.Errorf("failed to load prebuild workspaces by ID %q: %w", prebuildID.String(), err)
 	}
 
-	logger := m.logger.With(slog.F("expected_count", prebuild.Replicas), slog.F("actual_count", len(workspaces)))
-	if len(workspaces) < prebuild.Replicas {
+	logger := m.logger.With(slog.F("expected_count", prebuild.Count), slog.F("actual_count", len(workspaces)))
+	if len(workspaces) < prebuild.Count {
 		logger.Warn(ctx, "prebuild is missing workspaces, provisioning...")
+		// TODO: prevent further calls in case this takes long
 		// add replicas
-		for i := 0; i < prebuild.Replicas - len(workspaces); i++ {
+		for i := 0; i < prebuild.Count - len(workspaces); i++ {
 			m.provisionPrebuildWorkspace(ctx, prebuildID)
 		}
-	} else if len(workspaces) > prebuild.Replicas {
+	} else if len(workspaces) > prebuild.Count {
 		// TODO: nominate replicas to be deleted
 		logger.Warn(ctx, "too many replicas found")
 	} else {

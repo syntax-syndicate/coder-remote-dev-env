@@ -2096,7 +2096,7 @@ func (api *API) publishWorkspaceAgentLogsUpdate(ctx context.Context, workspaceAg
 	}
 }
 
-func (api *API) findMatchingPrebuild(ctx context.Context, templateVersionID uuid.UUID, paramValues []codersdk.WorkspaceBuildParameter) (*database.WorkspacePrebuild, error) {
+func (api *API) findMatchingPrebuild(ctx context.Context, templateVersionID uuid.UUID, paramValues []codersdk.WorkspaceBuildParameter) (*database.WorkspacePrebuildPool, error) {
 	pbs, err := api.Database.GetMatchingPrebuilds(ctx, templateVersionID)
 	if err != nil {
 		return nil, xerrors.Errorf("fetch matching prebuilds: %w", err)
@@ -2111,7 +2111,7 @@ func (api *API) findMatchingPrebuild(ctx context.Context, templateVersionID uuid
 		return &pbs[0], nil
 	}
 
-	var match *database.WorkspacePrebuild
+	var match *database.WorkspacePrebuildPool
 	for _, pb := range pbs {
 		poolParams, err := pb.ParamList()
 		if err != nil {
@@ -2178,7 +2178,7 @@ func (api *API) assignPrebuildToUser(ctx context.Context, r *http.Request, req c
 	}
 
 	// nominate prebuilt workspace for transfer
-	workspaces, err := api.Database.GetWorkspacesByPrebuildID(ctx, prebuild.ID)
+	workspaces, err := api.Database.GetUnassignedWorkspacesByPrebuildID(ctx, prebuild.ID)
 	if err != nil {
 		api.Logger.Warn(ctx, "failed to load workspaces for prebuild", slog.F("prebuild_id", prebuild.ID), slog.Error(err))
 		return nil, nil, false, nil

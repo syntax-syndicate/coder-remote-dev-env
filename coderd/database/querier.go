@@ -171,7 +171,7 @@ type sqlcQuerier interface {
 	GetLicenseByID(ctx context.Context, id int32) (License, error)
 	GetLicenses(ctx context.Context) ([]License, error)
 	GetLogoURL(ctx context.Context) (string, error)
-	GetMatchingPrebuilds(ctx context.Context, templateVersionID uuid.UUID) ([]WorkspacePrebuild, error)
+	GetMatchingPrebuilds(ctx context.Context, templateVersionID uuid.UUID) ([]WorkspacePrebuildPool, error)
 	GetNotificationMessagesByStatus(ctx context.Context, arg GetNotificationMessagesByStatusParams) ([]NotificationMessage, error)
 	// Fetch the notification report generator log indicating recent activity.
 	GetNotificationReportGeneratorLogByTemplate(ctx context.Context, templateID uuid.UUID) (NotificationReportGeneratorLog, error)
@@ -262,6 +262,13 @@ type sqlcQuerier interface {
 	GetTemplateVersionsCreatedAfter(ctx context.Context, createdAt time.Time) ([]TemplateVersion, error)
 	GetTemplates(ctx context.Context) ([]Template, error)
 	GetTemplatesWithFilter(ctx context.Context, arg GetTemplatesWithFilterParams) ([]Template, error)
+	// TODO: add query to fetch pending builds
+	//
+	// TODO: create view for latest build!!
+	//
+	// we only consider workspaces which are not deleted, unassigned, and in a "stop" state
+	//   AND latest_build.transition = 'stop'::workspace_transition -- TODO: restore this once workspaces are stopped after successful prebuild boot
+	GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error)
 	GetUnexpiredLicenses(ctx context.Context) ([]License, error)
 	// GetUserActivityInsights returns the ranking with top active users.
 	// The result can be filtered on template_ids, meaning only user data
@@ -322,8 +329,8 @@ type sqlcQuerier interface {
 	GetWorkspaceByID(ctx context.Context, id uuid.UUID) (Workspace, error)
 	GetWorkspaceByOwnerIDAndName(ctx context.Context, arg GetWorkspaceByOwnerIDAndNameParams) (Workspace, error)
 	GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceAppID uuid.UUID) (Workspace, error)
-	GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (WorkspacePrebuild, error)
-	GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuild, error)
+	GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (WorkspacePrebuildPool, error)
+	GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuildPool, error)
 	GetWorkspaceProxies(ctx context.Context) ([]WorkspaceProxy, error)
 	// Finds a workspace proxy that has an access URL or app hostname that matches
 	// the provided hostname. This is to check if a hostname matches any workspace
@@ -346,8 +353,6 @@ type sqlcQuerier interface {
 	// It has to be a CTE because the set returning function 'unnest' cannot
 	// be used in a WHERE clause.
 	GetWorkspaces(ctx context.Context, arg GetWorkspacesParams) ([]GetWorkspacesRow, error)
-	// TODO: rename to GetUnassigned...
-	GetWorkspacesByPrebuildID(ctx context.Context, id uuid.UUID) ([]Workspace, error)
 	GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]Workspace, error)
 	InsertAPIKey(ctx context.Context, arg InsertAPIKeyParams) (APIKey, error)
 	// We use the organization_id as the id
@@ -522,7 +527,7 @@ type sqlcQuerier interface {
 	// combination. The result is stored in the template_usage_stats table.
 	UpsertTemplateUsageStats(ctx context.Context) error
 	UpsertWorkspaceAgentPortShare(ctx context.Context, arg UpsertWorkspaceAgentPortShareParams) (WorkspaceAgentPortShare, error)
-	UpsertWorkspacePrebuild(ctx context.Context, arg UpsertWorkspacePrebuildParams) (WorkspacePrebuild, error)
+	UpsertWorkspacePrebuildPool(ctx context.Context, arg UpsertWorkspacePrebuildPoolParams) (WorkspacePrebuildPool, error)
 }
 
 var _ sqlcQuerier = (*sqlQuerier)(nil)

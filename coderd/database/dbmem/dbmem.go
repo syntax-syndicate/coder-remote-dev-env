@@ -1046,6 +1046,10 @@ func (q *FakeQuerier) getOrganizationByIDNoLock(id uuid.UUID) (database.Organiza
 	return database.Organization{}, sql.ErrNoRows
 }
 
+func (q *FakeQuerier) GetWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	panic("not implemented")
+}
+
 func (*FakeQuerier) AcquireLock(_ context.Context, _ int64) error {
 	return xerrors.New("AcquireLock must only be called within a transaction")
 }
@@ -3156,7 +3160,7 @@ func (q *FakeQuerier) GetLogoURL(_ context.Context) (string, error) {
 	return q.logoURL, nil
 }
 
-func (q *FakeQuerier) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuild, error) {
+func (q *FakeQuerier) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuildPool, error) {
 	err := validateDatabaseType(arg)
 	if err != nil {
 		return nil, err
@@ -5090,6 +5094,10 @@ func (q *FakeQuerier) GetTemplatesWithFilter(ctx context.Context, arg database.G
 	return q.GetAuthorizedTemplates(ctx, arg, nil)
 }
 
+func (q *FakeQuerier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	panic("not implemented")
+}
+
 func (q *FakeQuerier) GetUnexpiredLicenses(_ context.Context) ([]database.License, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
@@ -6518,11 +6526,11 @@ func (q *FakeQuerier) GetWorkspaceByWorkspaceAppID(_ context.Context, workspaceA
 	return database.Workspace{}, sql.ErrNoRows
 }
 
-func (q *FakeQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuild, error) {
+func (q *FakeQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (database.WorkspacePrebuildPool, error) {
 	panic("not implemented")
 }
 
-func (q *FakeQuerier) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuild, error) {
+func (q *FakeQuerier) GetWorkspacePrebuilds(ctx context.Context) ([]database.WorkspacePrebuildPool, error) {
 	panic("not implemented")
 }
 
@@ -6728,10 +6736,6 @@ func (q *FakeQuerier) GetWorkspaces(ctx context.Context, arg database.GetWorkspa
 	// A nil auth filter means no auth filter.
 	workspaceRows, err := q.GetAuthorizedWorkspaces(ctx, arg, nil)
 	return workspaceRows, err
-}
-
-func (q *FakeQuerier) GetWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
-	panic("not implemented")
 }
 
 func (q *FakeQuerier) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.Workspace, error) {
@@ -10615,10 +10619,10 @@ func (q *FakeQuerier) UpsertWorkspaceAgentPortShare(_ context.Context, arg datab
 	return psl, nil
 }
 
-func (q *FakeQuerier) UpsertWorkspacePrebuild(ctx context.Context, arg database.UpsertWorkspacePrebuildParams) (database.WorkspacePrebuild, error) {
+func (q *FakeQuerier) UpsertWorkspacePrebuildPool(ctx context.Context, arg database.UpsertWorkspacePrebuildPoolParams) (database.WorkspacePrebuildPool, error) {
 	err := validateDatabaseType(arg)
 	if err != nil {
-		return database.WorkspacePrebuild{}, err
+		return database.WorkspacePrebuildPool{}, err
 	}
 
 	panic("not implemented")

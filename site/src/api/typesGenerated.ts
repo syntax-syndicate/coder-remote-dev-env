@@ -1997,23 +1997,23 @@ export interface WorkspaceOptions {
 }
 
 // From codersdk/workspaceprebuilds.go
-export interface WorkspacePrebuild {
+export interface WorkspacePrebuildParameter {
+	readonly workspace_prebuild_id: string;
+	readonly name: string;
+	readonly value: string;
+}
+
+// From codersdk/workspaceprebuilds.go
+export interface WorkspacePrebuildPool {
 	readonly id: string;
 	readonly name: string;
-	readonly replicas: number;
+	readonly count: number;
 	readonly organization_id: string;
 	readonly template_id: string;
 	readonly template_version_id: string;
 	readonly created_by?: string;
 	readonly created_at: string;
 	readonly updated_at: string;
-}
-
-// From codersdk/workspaceprebuilds.go
-export interface WorkspacePrebuildParameter {
-	readonly workspace_prebuild_id: string;
-	readonly name: string;
-	readonly value: string;
 }
 
 // From codersdk/workspaceproxy.go

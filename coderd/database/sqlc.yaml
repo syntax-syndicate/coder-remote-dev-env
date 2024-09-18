@@ -76,7 +76,7 @@ sql:
           - column: "provisioner_job_stats.*_secs"
             go_type:
               type: "float64"
-          - column: "workspace_prebuilds.replicas"
+          - column: "workspace_prebuild_pool.count"
             go_type:
               type: "int"
         rename:

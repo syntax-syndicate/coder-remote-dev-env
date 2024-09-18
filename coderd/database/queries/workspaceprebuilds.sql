@@ -1,9 +1,9 @@
--- name: UpsertWorkspacePrebuild :one
-INSERT INTO workspace_prebuilds (id, name, replicas, organization_id, template_id, template_version_id, created_by)
-VALUES (@id, @name, @replicas, @organization_id, @template_id, @template_version_id, @created_by)
+-- name: UpsertWorkspacePrebuildPool :one
+INSERT INTO workspace_prebuild_pool (id, name, count, organization_id, template_id, template_version_id, created_by)
+VALUES (@id, @name, @count, @organization_id, @template_id, @template_version_id, @created_by)
 ON CONFLICT (id) DO UPDATE
     SET name                = @name,
-        replicas            = @replicas,
+        count               = @count,
         organization_id     = @organization_id,
         template_id         = @template_id,
         template_version_id = @template_version_id,
@@ -12,32 +12,56 @@ RETURNING *;
 
 -- name: GetWorkspacePrebuilds :many
 SELECT *
-FROM workspace_prebuilds;
+FROM workspace_prebuild_pool;
 
 -- name: GetWorkspacePrebuildByID :one
 SELECT *
-FROM workspace_prebuilds
+FROM workspace_prebuild_pool
 WHERE id = @id;
 
--- TODO: rename to GetUnassigned...
--- name: GetWorkspacesByPrebuildID :many
-SELECT *
-FROM workspaces
-WHERE prebuild_id = @id::uuid AND deleted = false AND prebuild_assigned = false;
+-- TODO: add query to fetch pending builds
+--
+-- TODO: create view for latest build!!
+--
+
+-- name: GetUnassignedWorkspacesByPrebuildID :many
+SELECT w.*
+FROM workspace_prebuild_pool wpp
+         INNER JOIN workspaces w ON wpp.id = w.prebuild_id
+         INNER JOIN LATERAL (
+    SELECT wb.transition
+    FROM workspace_builds wb
+             LEFT JOIN provisioner_jobs pj ON pj.id = wb.job_id
+    WHERE wb.workspace_id = w.id
+      -- we only consider workspaces which are fully built
+      AND pj.completed_at IS NOT NULL
+      AND pj.canceled_at IS NULL
+      AND pj.error IS NULL
+    ORDER BY build_number DESC
+    LIMIT 1
+    ) latest_build ON TRUE
+-- we only consider workspaces which are not deleted, unassigned, and in a "stop" state
+WHERE w.deleted = false
+  AND w.prebuild_id = @prebuild_id::uuid
+  AND w.prebuild_assigned = false
+--   AND latest_build.transition = 'stop'::workspace_transition -- TODO: restore this once workspaces are stopped after successful prebuild boot
+GROUP BY latest_build.transition, w.id;
 
 -- name: GetMatchingPrebuilds :many
 SELECT *
-FROM workspace_prebuilds
+FROM workspace_prebuild_pool
 WHERE template_version_id = @template_version_id;
 
 -- name: MarkWorkspacePrebuildAssigned :exec
-UPDATE workspaces SET prebuild_assigned = true WHERE id = $1;
+UPDATE workspaces
+SET prebuild_assigned = true
+WHERE id = $1;
 
 -- SELECT wp.id                                                        AS prebuild_id,
 --        latest_build.template_id,
 --        latest_build.template_version_id,
 --        md5(string_agg(wpp.name || wpp.value, '' ORDER BY wpp.name)) AS params_hash
--- FROM workspace_prebuilds wp
+-- FROM workspace_prebuild_pool wp
 --          LEFT JOIN workspace_prebuild_parameters wpp ON wpp.workspace_prebuild_id = wp.id
 --          LEFT JOIN (SELECT w.template_id,
 --                            w.prebuild_id,

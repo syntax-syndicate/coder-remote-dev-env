@@ -16,4 +16,5 @@ CREATE TABLE workspace_prebuilds
 );
 
 ALTER TABLE workspaces
-    ADD COLUMN IF NOT EXISTS prebuild_id uuid NULL REFERENCES workspace_prebuilds (id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS prebuild_id uuid NULL REFERENCES workspace_prebuilds (id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS prebuild_assigned bool NULL; -- this field is nullable because it only makes sense if prebuild_id is set

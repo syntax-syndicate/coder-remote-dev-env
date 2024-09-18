@@ -1632,8 +1632,9 @@ func (q *querier) GetLogoURL(ctx context.Context) (string, error) {
 	return q.db.GetLogoURL(ctx)
 }
 
-func (q *querier) GetMatchingPrebuilds(ctx context.Context, arg database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
-	panic("not implemented")
+func (q *querier) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuild, error) {
+	// TODO: auth
+	return q.db.GetMatchingPrebuilds(ctx, arg)
 }
 
 func (q *querier) GetNotificationMessagesByStatus(ctx context.Context, arg database.GetNotificationMessagesByStatusParams) ([]database.NotificationMessage, error) {
@@ -2720,7 +2721,10 @@ func (q *querier) GetWorkspaces(ctx context.Context, arg database.GetWorkspacesP
 }
 
 func (q *querier) GetWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
-	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacesByPrebuildID)(ctx, prebuildID)
+	// TODO: auth
+	// Maybe only check org visibility, because all users should be able to read workspace prebuilds since they're about to own one.
+	// return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacesByPrebuildID)(ctx, prebuildID)
+	return q.db.GetWorkspacesByPrebuildID(ctx, prebuildID)
 }
 
 func (q *querier) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.Workspace, error) {
@@ -3175,6 +3179,11 @@ func (q *querier) ListWorkspaceAgentPortShares(ctx context.Context, workspaceID 
 	return q.db.ListWorkspaceAgentPortShares(ctx, workspaceID)
 }
 
+func (q *querier) MarkWorkspacePrebuildAssigned(ctx context.Context, id uuid.UUID) error {
+	// TODO: auth
+	return q.db.MarkWorkspacePrebuildAssigned(ctx, id)
+}
+
 func (q *querier) OrganizationMembers(ctx context.Context, arg database.OrganizationMembersParams) ([]database.OrganizationMembersRow, error) {
 	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.OrganizationMembers)(ctx, arg)
 }
@@ -3222,9 +3231,9 @@ func (q *querier) RevokeDBCryptKey(ctx context.Context, activeKeyDigest string) 
 	return q.db.RevokeDBCryptKey(ctx, activeKeyDigest)
 }
 
-func (q *querier) TransferWorkspace(ctx context.Context, arg database.TransferWorkspaceParams) (database.Workspace, error) {
+func (q *querier) TransferWorkspaceOwnership(ctx context.Context, arg database.TransferWorkspaceOwnershipParams) (database.Workspace, error) {
 	// TODO: auth
-	return q.db.TransferWorkspace(ctx, arg)
+	return q.db.TransferWorkspaceOwnership(ctx, arg)
 }
 
 func (q *querier) TryAcquireLock(ctx context.Context, id int64) (bool, error) {

@@ -23,7 +23,7 @@ func (api *API) postWorkspacePrebuilds(rw http.ResponseWriter, r *http.Request) 
 	createPrebuild.CreatedBy = apiKey.UserID
 	createPrebuild.OrganizationID = org.ID
 
-	pb, err := api.PrebuildsCoordinator.CreateNewWorkspacePrebuild(ctx, createPrebuild)
+	pb, err := api.PrebuildsController.CreateNewWorkspacePrebuild(ctx, createPrebuild)
 	if err != nil || pb == nil {
 		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
 			Message: "Internal error creating workspace prebuild.",

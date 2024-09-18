@@ -15,7 +15,7 @@ func PrebuildCreatedChannel() string {
 	return "prebuild-created"
 }
 
-func (m Coordinator) prebuildCreatedListener(ctx context.Context, message []byte, err error) {
+func (m Controller) prebuildCreatedListener(ctx context.Context, message []byte, err error) {
 	if errors.Is(err, pubsub.ErrDroppedMessages) {
 		m.logger.Warn(ctx, "pubsub may have dropped prebuild creation events")
 		// TODO: run slow check to fetch all prebuilds and reconcile state

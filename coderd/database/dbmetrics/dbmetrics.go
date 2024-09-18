@@ -795,7 +795,7 @@ func (m metricsStore) GetLogoURL(ctx context.Context) (string, error) {
 	return url, err
 }
 
-func (m metricsStore) GetMatchingPrebuilds(ctx context.Context, arg database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
+func (m metricsStore) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuild, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetMatchingPrebuilds(ctx, arg)
 	m.queryLatencies.WithLabelValues("GetMatchingPrebuilds").Observe(time.Since(start).Seconds())
@@ -2041,6 +2041,13 @@ func (m metricsStore) ListWorkspaceAgentPortShares(ctx context.Context, workspac
 	return r0, r1
 }
 
+func (m metricsStore) MarkWorkspacePrebuildAssigned(ctx context.Context, id uuid.UUID) error {
+	start := time.Now()
+	r0 := m.s.MarkWorkspacePrebuildAssigned(ctx, id)
+	m.queryLatencies.WithLabelValues("MarkWorkspacePrebuildAssigned").Observe(time.Since(start).Seconds())
+	return r0
+}
+
 func (m metricsStore) OrganizationMembers(ctx context.Context, arg database.OrganizationMembersParams) ([]database.OrganizationMembersRow, error) {
 	start := time.Now()
 	r0, r1 := m.s.OrganizationMembers(ctx, arg)
@@ -2083,10 +2090,10 @@ func (m metricsStore) RevokeDBCryptKey(ctx context.Context, activeKeyDigest stri
 	return r0
 }
 
-func (m metricsStore) TransferWorkspace(ctx context.Context, arg database.TransferWorkspaceParams) (database.Workspace, error) {
+func (m metricsStore) TransferWorkspaceOwnership(ctx context.Context, arg database.TransferWorkspaceOwnershipParams) (database.Workspace, error) {
 	start := time.Now()
-	r0, r1 := m.s.TransferWorkspace(ctx, arg)
-	m.queryLatencies.WithLabelValues("TransferWorkspace").Observe(time.Since(start).Seconds())
+	r0, r1 := m.s.TransferWorkspaceOwnership(ctx, arg)
+	m.queryLatencies.WithLabelValues("TransferWorkspaceOwnership").Observe(time.Since(start).Seconds())
 	return r0, r1
 }
 

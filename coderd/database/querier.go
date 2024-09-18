@@ -171,7 +171,7 @@ type sqlcQuerier interface {
 	GetLicenseByID(ctx context.Context, id int32) (License, error)
 	GetLicenses(ctx context.Context) ([]License, error)
 	GetLogoURL(ctx context.Context) (string, error)
-	GetMatchingPrebuilds(ctx context.Context, arg GetMatchingPrebuildsParams) ([]WorkspacePrebuild, error)
+	GetMatchingPrebuilds(ctx context.Context, templateVersionID uuid.UUID) ([]WorkspacePrebuild, error)
 	GetNotificationMessagesByStatus(ctx context.Context, arg GetNotificationMessagesByStatusParams) ([]NotificationMessage, error)
 	// Fetch the notification report generator log indicating recent activity.
 	GetNotificationReportGeneratorLogByTemplate(ctx context.Context, templateID uuid.UUID) (NotificationReportGeneratorLog, error)
@@ -346,6 +346,7 @@ type sqlcQuerier interface {
 	// It has to be a CTE because the set returning function 'unnest' cannot
 	// be used in a WHERE clause.
 	GetWorkspaces(ctx context.Context, arg GetWorkspacesParams) ([]GetWorkspacesRow, error)
+	// TODO: rename to GetUnassigned...
 	GetWorkspacesByPrebuildID(ctx context.Context, id uuid.UUID) ([]Workspace, error)
 	GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]Workspace, error)
 	InsertAPIKey(ctx context.Context, arg InsertAPIKeyParams) (APIKey, error)
@@ -410,6 +411,7 @@ type sqlcQuerier interface {
 	ListProvisionerKeysByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ProvisionerKey, error)
 	ListProvisionerKeysByOrganizationExcludeReserved(ctx context.Context, organizationID uuid.UUID) ([]ProvisionerKey, error)
 	ListWorkspaceAgentPortShares(ctx context.Context, workspaceID uuid.UUID) ([]WorkspaceAgentPortShare, error)
+	MarkWorkspacePrebuildAssigned(ctx context.Context, id uuid.UUID) error
 	// Arguments are optional with uuid.Nil to ignore.
 	//  - Use just 'organization_id' to get all members of an org
 	//  - Use just 'user_id' to get all orgs a user is a member of
@@ -420,7 +422,7 @@ type sqlcQuerier interface {
 	RemoveUserFromAllGroups(ctx context.Context, userID uuid.UUID) error
 	RemoveUserFromGroups(ctx context.Context, arg RemoveUserFromGroupsParams) ([]uuid.UUID, error)
 	RevokeDBCryptKey(ctx context.Context, activeKeyDigest string) error
-	TransferWorkspace(ctx context.Context, arg TransferWorkspaceParams) (Workspace, error)
+	TransferWorkspaceOwnership(ctx context.Context, arg TransferWorkspaceOwnershipParams) (Workspace, error)
 	// Non blocking lock. Returns true if the lock was acquired, false otherwise.
 	//
 	// This must be called from within a transaction. The lock will be automatically

@@ -3,6 +3,7 @@ package workspaceprebuilds
 import (
 	"context"
 	"crypto/md5"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
@@ -25,9 +26,9 @@ import (
 
 // TODO: use different name to describe the prebuild definition and the workspace prebuild; terminology is currently confusing.
 
-// Coordinator TODO
+// Controller TODO
 // TODO: this might not be the best name since it could be confused with the other "coordinator" concepts in tailnet package.
-type Coordinator struct {
+type Controller struct {
 	stopping chan any
 
 	store      database.Store
@@ -39,8 +40,8 @@ type Coordinator struct {
 
 type authorizeFunc func(r *http.Request, action policy.Action, object rbac.Objecter) bool
 
-func NewCoordinator(store database.Store, ps pubsub.Pubsub, authorizer authorizeFunc, logger slog.Logger) *Coordinator {
-	return &Coordinator{
+func NewController(store database.Store, ps pubsub.Pubsub, authorizer authorizeFunc, logger slog.Logger) *Controller {
+	return &Controller{
 		stopping: make(chan any, 1),
 
 		store:      store,
@@ -51,7 +52,7 @@ func NewCoordinator(store database.Store, ps pubsub.Pubsub, authorizer authorize
 	}
 }
 
-func (m Coordinator) provisionPrebuildWorkspace(ctx context.Context, prebuildID uuid.UUID) {
+func (m Controller) provisionPrebuildWorkspace(ctx context.Context, prebuildID uuid.UUID) {
 	// TODO: auditing
 	aReq := &audit.Request[database.Workspace]{}
 
@@ -116,6 +117,7 @@ func (m Coordinator) provisionPrebuildWorkspace(ctx context.Context, prebuildID 
 			LastUsedAt:       dbtime.Now(),
 			AutomaticUpdates: database.AutomaticUpdatesAlways, // TODO: ?
 			PrebuildID:       uuid.NullUUID{UUID: prebuildID, Valid: true},
+			PrebuildAssigned: sql.NullBool{Bool: false, Valid: true},
 		})
 		if err != nil {
 			return xerrors.Errorf("insert workspace: %w", err)
@@ -124,7 +126,7 @@ func (m Coordinator) provisionPrebuildWorkspace(ctx context.Context, prebuildID 
 		builder := wsbuilder.New(workspace, database.WorkspaceTransitionStart).
 			Reason(database.BuildReasonInitiator).
 			Initiator(initiator).
-			ActiveVersion().
+			// ActiveVersion() // TODO: always active version?
 			VersionID(prebuild.TemplateVersionID)
 		// RichParameterValues(req.RichParameterValues)
 
@@ -163,14 +165,14 @@ func (m Coordinator) provisionPrebuildWorkspace(ctx context.Context, prebuildID 
 	logger.Info(ctx, "prebuild workspace created!", slog.F("workspace_build_id", workspaceBuild.ID.String()))
 }
 
-func (m Coordinator) generatePrebuildWorkspaceName(base string) string {
+func (m Controller) generatePrebuildWorkspaceName(base string) string {
 	hash := md5.Sum([]byte(uuid.New().String()))
 	return fmt.Sprintf("%s-%x", base, hash[:6])
 }
 
 // Run subscribes to various pubsub channels to implement a control loop. Run blocks until the given context is canceled
 // or Stop is called.
-func (m Coordinator) Run(ctx context.Context) error {
+func (m Controller) Run(ctx context.Context) error {
 	cancelCreated, err := m.pubsub.SubscribeWithErr(PrebuildCreatedChannel(), m.prebuildCreatedListener)
 	defer cancelCreated()
 	if err != nil {
@@ -190,7 +192,7 @@ func (m Coordinator) Run(ctx context.Context) error {
 	}
 }
 
-func (m Coordinator) reconcileLoop(ctx context.Context, dur time.Duration) {
+func (m Controller) reconcileLoop(ctx context.Context, dur time.Duration) {
 	tick := time.NewTicker(dur)
 	defer tick.Stop()
 
@@ -221,7 +223,7 @@ func (m Coordinator) reconcileLoop(ctx context.Context, dur time.Duration) {
 	}
 }
 
-func (m Coordinator) Stop(ctx context.Context) error {
+func (m Controller) Stop(ctx context.Context) error {
 	m.logger.Info(ctx, "stop requested")
 	close(m.stopping)
 	return nil

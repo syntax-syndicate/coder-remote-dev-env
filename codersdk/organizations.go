@@ -207,6 +207,7 @@ type CreateWorkspaceRequest struct {
 	// during the initial provision.
 	RichParameterValues []WorkspaceBuildParameter `json:"rich_parameter_values,omitempty"`
 	AutomaticUpdates    AutomaticUpdates          `json:"automatic_updates,omitempty"`
+	IgnorePrebuild      bool                      `json:"ignore_prebuild,omitempty"`
 }
 
 func (c *Client) OrganizationByName(ctx context.Context, name string) (Organization, error) {

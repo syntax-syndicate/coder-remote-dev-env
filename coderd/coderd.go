@@ -250,8 +250,8 @@ type Options struct {
 	// IDPSync holds all configured values for syncing external IDP users into Coder.
 	IDPSync idpsync.IDPSync
 
-	// PrebuildsCoordinator is responsible for creating and maintaining workspace prebuilds.
-	PrebuildsCoordinator workspaceprebuilds.Coordinator
+	// PrebuildsController is responsible for creating and maintaining workspace prebuilds.
+	PrebuildsController workspaceprebuilds.Controller
 }
 
 // @title Coder API

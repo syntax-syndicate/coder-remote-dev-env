@@ -2785,8 +2785,9 @@ type Workspace struct {
 	DeletingAt        sql.NullTime     `db:"deleting_at" json:"deleting_at"`
 	AutomaticUpdates  AutomaticUpdates `db:"automatic_updates" json:"automatic_updates"`
 	// Favorite is true if the workspace owner has favorited the workspace.
-	Favorite   bool          `db:"favorite" json:"favorite"`
-	PrebuildID uuid.NullUUID `db:"prebuild_id" json:"prebuild_id"`
+	Favorite         bool          `db:"favorite" json:"favorite"`
+	PrebuildID       uuid.NullUUID `db:"prebuild_id" json:"prebuild_id"`
+	PrebuildAssigned sql.NullBool  `db:"prebuild_assigned" json:"prebuild_assigned"`
 }
 
 type WorkspaceAgent struct {

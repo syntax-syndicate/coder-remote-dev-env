@@ -13,7 +13,7 @@ import (
 
 // CreateNewWorkspacePrebuild creates a new workspace prebuild in the database and triggers the workspace builds.
 // TODO: parameter matching arithmetic when creating new workspace which may match pubsub definition
-func (m Coordinator) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuild, error) {
+func (m Controller) CreateNewWorkspacePrebuild(ctx context.Context, req codersdk.CreateWorkspacePrebuildRequest) (*database.WorkspacePrebuild, error) {
 	// TODO: auditing
 	// TODO: trigger workspace builds
 	// TODO: validate required params are set

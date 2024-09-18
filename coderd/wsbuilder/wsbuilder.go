@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
@@ -73,9 +71,6 @@ type Builder struct {
 	parameterNames               *[]string
 	parameterValues              *[]string
 
-	// prebuilds
-	allowPrebuild bool
-
 	verifyNoLegacyParametersOnce bool
 }
 
@@ -112,7 +107,7 @@ type stateTarget struct {
 }
 
 func New(w database.Workspace, t database.WorkspaceTransition) Builder {
-	return Builder{workspace: w, trans: t, allowPrebuild: true}
+	return Builder{workspace: w, trans: t}
 }
 
 // Methods that customize the build are public, have a struct receiver and return a new Builder.
@@ -195,12 +190,6 @@ func (b Builder) SetLastWorkspaceBuildJobInTx(job *database.ProvisionerJob) Buil
 	return b
 }
 
-// DisallowPrebuild prevents a prebuilt workspace from being used if available.
-func (b Builder) DisallowPrebuild() Builder {
-	b.allowPrebuild = false
-	return b
-}
-
 type BuildError struct {
 	// Status is a suitable HTTP status code
 	Status  int
@@ -234,23 +223,6 @@ func (b *Builder) Build(
 
 	var workspaceBuild *database.WorkspaceBuild
 	var provisionerJob *database.ProvisionerJob
-
-	// TODO: check for experiment
-	// TODO: transaction + lock
-	prebuild, err := b.matchingPrebuild()
-	if err != nil || prebuild == nil {
-		// cannot find matching prebuild
-		// TODO: logger?
-	} else {
-
-		// Only do this here instead of outside so that we can log if a prebuild _was_ found but not used.
-		if b.allowPrebuild {
-			// TODO: pick one random workspace, then initiate transfer and return that workspaceBuild/provisionerJob.
-		} else {
-			// prebuild found but chosen to not be used
-		}
-	}
-
 	// Run the build in a transaction with RepeatableRead isolation, and retries.
 	// RepeatableRead isolation ensures that we get a consistent view of the database while
 	// computing the new build.  This simplifies the logic so that we do not need to worry if
@@ -425,79 +397,6 @@ func (b *Builder) buildTx(authFunc func(action policy.Action, object rbac.Object
 	}
 
 	return &workspaceBuild, &provisionerJob, nil
-}
-
-func (b Builder) matchingPrebuild() (*database.WorkspacePrebuild, error) {
-	if b.template == nil || b.templateVersion == nil {
-		return nil, xerrors.Errorf("template or version not defined")
-	}
-
-	pbs, err := b.store.GetMatchingPrebuilds(b.ctx, database.GetMatchingPrebuildsParams{
-		TemplateID:        b.template.ID,
-		TemplateVersionID: b.templateVersion.ID,
-	})
-	if err != nil {
-		return nil, xerrors.Errorf("fetch matching prebuilds: %w", err)
-	}
-
-	if len(pbs) == 0 {
-		return nil, xerrors.Errorf("no matching prebuilds found")
-	}
-
-	var match *database.WorkspacePrebuild
-	for _, pb := range pbs {
-		poolParams, err := pb.ParamList()
-		if err != nil {
-			return nil, xerrors.Errorf("get param list: %w", err)
-		}
-
-		if len(poolParams) == 0 {
-			// No params: match!
-			return &pb, nil
-		}
-
-		// By definition, the pool MUST have defined all required parameters in order for validation to have proceeded.
-		tmplParamNames, tmplParamValues, err := b.getParameters()
-		if err != nil {
-			return nil, xerrors.Errorf("get template parameters: %w", err)
-		}
-
-		if len(tmplParamNames) == 0 {
-			return nil, xerrors.Errorf("no template params found")
-		}
-
-		if len(tmplParamNames) != len(tmplParamValues) {
-			return nil, xerrors.Errorf("BUG: count of template names (%d) & versions (%d) are misaligned",
-				len(tmplParamNames), len(tmplParamValues))
-		}
-
-		var found bool
-		for _, param := range poolParams {
-			nameIdx := slices.Index(tmplParamNames, param.Name)
-			if nameIdx < 0 {
-				found = false
-				break
-			}
-
-			v := tmplParamValues[nameIdx]
-			if !strings.EqualFold(v, param.Value) {
-				found = false
-				break
-			}
-
-			found = true
-		}
-
-		if found {
-			match = &pb
-		}
-	}
-
-	if match == nil {
-		return nil, xerrors.Errorf("no matched found")
-	}
-
-	return match, nil
 }
 
 func (b *Builder) getTemplate() (*database.Template, error) {

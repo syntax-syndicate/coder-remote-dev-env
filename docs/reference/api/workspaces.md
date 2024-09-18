@@ -25,6 +25,7 @@ of the template will be used.
 {
 	"automatic_updates": "always",
 	"autostart_schedule": "string",
+	"ignore_prebuild": true,
 	"name": "string",
 	"rich_parameter_values": [
 		{
@@ -482,6 +483,7 @@ of the template will be used.
 {
 	"automatic_updates": "always",
 	"autostart_schedule": "string",
+	"ignore_prebuild": true,
 	"name": "string",
 	"rich_parameter_values": [
 		{

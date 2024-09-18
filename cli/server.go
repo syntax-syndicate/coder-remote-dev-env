@@ -1031,11 +1031,11 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			}
 
 			// Always create the coordinator, but only Run() it if enabled.
-			options.PrebuildsCoordinator = *workspaceprebuilds.NewCoordinator(options.Database, options.Pubsub, coderAPI.Authorize, logger.Named("prebuilds"))
+			options.PrebuildsController = *workspaceprebuilds.NewController(options.Database, options.Pubsub, coderAPI.Authorize, logger.Named("prebuilds"))
 			if experiments.Enabled(codersdk.ExperimentWorkspacePrebuilds) {
 				go func() {
 					// nolint:gocritic // TODO: create own role.
-					err = options.PrebuildsCoordinator.Run(dbauthz.AsSystemRestricted(ctx))
+					err = options.PrebuildsController.Run(dbauthz.AsSystemRestricted(ctx))
 					logger.Info(ctx, "prebuild coordinator exited", slog.Error(err))
 				}()
 			}
@@ -1174,7 +1174,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				}
 			}
 
-			err = shutdownWithTimeout(options.PrebuildsCoordinator.Stop, 5*time.Second)
+			err = shutdownWithTimeout(options.PrebuildsController.Stop, 5*time.Second)
 			if err != nil {
 				cliui.Warnf(inv.Stderr, "Prebuilds manager shutdown took longer than 5s: %s\n", err)
 			}

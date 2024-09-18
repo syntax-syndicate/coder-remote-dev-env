@@ -321,10 +321,6 @@ func (api *API) workspaceBuildByBuildNumber(rw http.ResponseWriter, r *http.Requ
 	httpapi.Write(ctx, rw, http.StatusOK, apiBuild)
 }
 
-// TODO
-//
-// seems like something's fucky with SSH after transfer... create new workspace to make sure it isn't for all new workspaces
-// ...we need to stop & restart the agent after transfer
 func (api *API) workspaceTransferToUser(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	owner := httpmw.UserParam(r)
@@ -338,7 +334,6 @@ func (api *API) workspaceTransferToUser(rw http.ResponseWriter, r *http.Request)
 	// TODO: auditing
 	// TODO: consider how we test this (integration tests for terraform don't exist currently)
 	// TODO: locking for HA
-	// TODO: in-memory coordinator vs pgcoord
 	// TODO: warn if personal info used in non-ephemeral resource
 	//
 	p := chi.URLParam(r, "targetuserid")
@@ -421,39 +416,20 @@ func (api *API) workspaceTransferToUser(rw http.ResponseWriter, r *http.Request)
 		workspaceBuild *database.WorkspaceBuild
 	)
 
-	// TODO: instead, call postWorkspaceBuilds?
-	// 			we'll need to wait for the stop build to complete, then execute the start build
-	//			question is: do we do this synchronously (i.e. block response until builds complete) or async?
-	//			i suppose the workspace ownership change is 1 operation, and the builds are another... but we need some
-	//			supervision of the latter process (if we're to support transferring a workspace as one API operation)
-
 	err = api.Database.InTx(func(db database.Store) error {
-		// Execute transfer.
-		workspace, err = api.Database.TransferWorkspace(ctx, database.TransferWorkspaceParams{
-			TargetUser:  targetUserID,
-			WorkspaceID: workspace.ID,
+		workspaceBuild, provisionerJob, err = transferWorkspace(ctx, db, workspaceTransferRequest{
+			workspaceID:  workspace.ID,
+			newOwnerID:   targetUserID,
+			richParams:   richParams,
+			auditBaggage: audit.WorkspaceBuildBaggageFromRequest(r),
+		}, func(action policy.Action, object rbac.Objecter) bool {
+			return api.Authorize(r, action, object)
 		})
+
 		if err != nil {
-			// TODO: log
-			return err
+			api.Logger.Error(ctx, "failed to transfer workspace", slog.Error(err), slog.F("workspace_id", workspace.ID.String()), slog.F("new_owner_id", targetUserID.String()))
 		}
 
-		// Rebuild workspace with new ownership.
-		builder := wsbuilder.New(workspace, database.WorkspaceTransitionStop).
-			Reason(database.BuildReasonTransfer).
-			Initiator(owner.ID).
-			ActiveVersion(). // always require active version?
-			RichParameterValues(richParams).
-			VersionID(latestBuild.TemplateVersionID)
-
-		workspaceBuild, provisionerJob, err = builder.Build(
-			ctx,
-			db,
-			func(action policy.Action, object rbac.Objecter) bool {
-				return api.Authorize(r, action, object)
-			},
-			audit.WorkspaceBuildBaggageFromRequest(r),
-		)
 		return err
 	}, nil)
 	var bldErr wsbuilder.BuildError

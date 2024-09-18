@@ -19,15 +19,19 @@ SELECT *
 FROM workspace_prebuilds
 WHERE id = @id;
 
+-- TODO: rename to GetUnassigned...
 -- name: GetWorkspacesByPrebuildID :many
 SELECT *
 FROM workspaces
-WHERE prebuild_id = @id::uuid;
+WHERE prebuild_id = @id::uuid AND deleted = false AND prebuild_assigned = false;
 
 -- name: GetMatchingPrebuilds :many
 SELECT *
 FROM workspace_prebuilds
-WHERE template_id = @template_id AND template_version_id = @template_version_id;
+WHERE template_version_id = @template_version_id;
+
+-- name: MarkWorkspacePrebuildAssigned :exec
+UPDATE workspaces SET prebuild_assigned = true WHERE id = $1;
 
 -- SELECT wp.id                                                        AS prebuild_id,
 --        latest_build.template_id,

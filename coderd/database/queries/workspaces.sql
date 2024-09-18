@@ -373,7 +373,8 @@ WHERE
 		'0001-01-01 00:00:00+00'::timestamptz, -- deleting_at
 		'never'::automatic_updates, -- automatic_updates
 		false, -- favorite
-		null, -- prebuild_id
+		null,  -- prebuild_id
+		false, -- prebuild_assigned
 		-- Extra columns added to `filtered_workspaces`
 		'', -- template_name
 		'00000000-0000-0000-0000-000000000000'::uuid, -- template_version_id
@@ -434,10 +435,11 @@ INSERT INTO
 		ttl,
 		last_used_at,
 		automatic_updates,
-        prebuild_id
+        prebuild_id,
+        prebuild_assigned
 	)
 VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
+	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *;
 
 -- name: UpdateWorkspaceDeletedByID :exec
 UPDATE
@@ -690,7 +692,7 @@ UPDATE workspaces SET favorite = true WHERE id = @id;
 -- name: UnfavoriteWorkspace :exec
 UPDATE workspaces SET favorite = false WHERE id = @id;
 
--- name: TransferWorkspace :one
+-- name: TransferWorkspaceOwnership :one
 UPDATE workspaces
 SET owner_id = @target_user
 WHERE id = @workspace_id

@@ -3156,7 +3156,7 @@ func (q *FakeQuerier) GetLogoURL(_ context.Context) (string, error) {
 	return q.logoURL, nil
 }
 
-func (q *FakeQuerier) GetMatchingPrebuilds(ctx context.Context, arg database.GetMatchingPrebuildsParams) ([]database.WorkspacePrebuild, error) {
+func (q *FakeQuerier) GetMatchingPrebuilds(ctx context.Context, arg uuid.UUID) ([]database.WorkspacePrebuild, error) {
 	err := validateDatabaseType(arg)
 	if err != nil {
 		return nil, err
@@ -8172,6 +8172,10 @@ func (q *FakeQuerier) ListWorkspaceAgentPortShares(_ context.Context, workspaceI
 	return shares, nil
 }
 
+func (q *FakeQuerier) MarkWorkspacePrebuildAssigned(ctx context.Context, id uuid.UUID) error {
+	panic("not implemented")
+}
+
 func (q *FakeQuerier) OrganizationMembers(_ context.Context, arg database.OrganizationMembersParams) ([]database.OrganizationMembersRow, error) {
 	if err := validateDatabaseType(arg); err != nil {
 		return []database.OrganizationMembersRow{}, err
@@ -8330,7 +8334,7 @@ func (q *FakeQuerier) RevokeDBCryptKey(_ context.Context, activeKeyDigest string
 	return sql.ErrNoRows
 }
 
-func (q *FakeQuerier) TransferWorkspace(ctx context.Context, arg database.TransferWorkspaceParams) (database.Workspace, error) {
+func (q *FakeQuerier) TransferWorkspaceOwnership(ctx context.Context, arg database.TransferWorkspaceOwnershipParams) (database.Workspace, error) {
 	err := validateDatabaseType(arg)
 	if err != nil {
 		return database.Workspace{}, err

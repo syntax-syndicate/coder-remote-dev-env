@@ -9795,6 +9795,9 @@ const docTemplate = `{
                 "autostart_schedule": {
                     "type": "string"
                 },
+                "ignore_prebuild": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },

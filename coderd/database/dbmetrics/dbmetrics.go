@@ -949,6 +949,13 @@ func (m metricsStore) GetParameterSchemasByJobID(ctx context.Context, jobID uuid
 	return schemas, err
 }
 
+func (m metricsStore) GetPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetPrebuildsByPoolID(ctx, prebuildID)
+	m.queryLatencies.WithLabelValues("GetPrebuildsByPoolID").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetPreviousTemplateVersion(ctx context.Context, arg database.GetPreviousTemplateVersionParams) (database.TemplateVersion, error) {
 	start := time.Now()
 	version, err := m.s.GetPreviousTemplateVersion(ctx, arg)
@@ -1257,10 +1264,10 @@ func (m metricsStore) GetTemplatesWithFilter(ctx context.Context, arg database.G
 	return templates, err
 }
 
-func (m metricsStore) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+func (m metricsStore) GetUnassignedPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
 	start := time.Now()
-	r0, r1 := m.s.GetUnassignedWorkspacesByPrebuildID(ctx, prebuildID)
-	m.queryLatencies.WithLabelValues("GetUnassignedWorkspacesByPrebuildID").Observe(time.Since(start).Seconds())
+	r0, r1 := m.s.GetUnassignedPrebuildsByPoolID(ctx, prebuildID)
+	m.queryLatencies.WithLabelValues("GetUnassignedPrebuildsByPoolID").Observe(time.Since(start).Seconds())
 	return r0, r1
 }
 

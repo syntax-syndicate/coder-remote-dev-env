@@ -15,6 +15,10 @@ func PrebuildCreatedChannel() string {
 	return "prebuild-created"
 }
 
+func PrebuildReconcileChannel() string {
+	return "prebuild-reconcile"
+}
+
 func PrebuildReadyChannel() string {
 	return "prebuild-ready"
 }
@@ -26,6 +30,19 @@ func (m Controller) prebuildCreatedListener(ctx context.Context, message []byte,
 		return
 	}
 
+	prebuildID, err := uuid.ParseBytes(message)
+	if err != nil {
+		m.logger.Error(ctx, "failed to parse prebuild ID", slog.F("prebuild_id", message), slog.Error(err))
+		return
+	}
+
+	if err = m.ReconcileState(dbauthz.AsSystemRestricted(ctx), prebuildID); err != nil {
+		m.logger.Error(ctx, "failed to reconcile prebuild state", slog.F("prebuild_id", message), slog.Error(err))
+		return
+	}
+}
+
+func (m Controller) prebuildReconcileListener(ctx context.Context, message []byte) {
 	prebuildID, err := uuid.ParseBytes(message)
 	if err != nil {
 		m.logger.Error(ctx, "failed to parse prebuild ID", slog.F("prebuild_id", message), slog.Error(err))

@@ -21,12 +21,34 @@ SELECT *
 FROM workspace_prebuild_pool
 WHERE id = @id;
 
--- TODO: add query to fetch pending builds
 --
--- TODO: create view for latest build!!
+-- TODO: create view for latest build!! WE NEED TO SEE INTERMEDIARY STATUSES, NOT JUST TERMINAL ONES.
+--          i.e. when we list the unassigned prebuilds we must exclude the ones which are in the process of transferring
 --
 
--- name: GetUnassignedWorkspacesByPrebuildID :many
+-- name: GetPrebuildsByPoolID :many
+SELECT w.*
+FROM workspace_prebuild_pool wpp
+         INNER JOIN workspaces w ON wpp.id = w.prebuild_id
+         INNER JOIN LATERAL (
+    SELECT wb.transition
+    FROM workspace_builds wb
+             LEFT JOIN provisioner_jobs pj ON pj.id = wb.job_id
+    WHERE wb.workspace_id = w.id
+      -- we only consider workspaces which are fully built
+      AND pj.completed_at IS NOT NULL
+      AND pj.canceled_at IS NULL
+      AND pj.error IS NULL
+    ORDER BY build_number DESC
+    LIMIT 1
+    ) latest_build ON TRUE
+-- we only consider workspaces which are not deleted, unassigned, and in any state
+WHERE w.deleted = false
+  AND w.prebuild_id = @prebuild_id::uuid
+  AND w.prebuild_assigned = false
+GROUP BY latest_build.transition, w.id;
+
+-- name: GetUnassignedPrebuildsByPoolID :many
 SELECT w.*
 FROM workspace_prebuild_pool wpp
          INNER JOIN workspaces w ON wpp.id = w.prebuild_id
@@ -46,7 +68,7 @@ FROM workspace_prebuild_pool wpp
 WHERE w.deleted = false
   AND w.prebuild_id = @prebuild_id::uuid
   AND w.prebuild_assigned = false
---   AND latest_build.transition = 'stop'::workspace_transition -- TODO: restore this once workspaces are stopped after successful prebuild boot
+  AND latest_build.transition = 'stop'::workspace_transition
 GROUP BY latest_build.transition, w.id;
 
 -- name: GetMatchingPrebuilds :many

@@ -194,6 +194,12 @@ type sqlcQuerier interface {
 	GetOrganizations(ctx context.Context, arg GetOrganizationsParams) ([]Organization, error)
 	GetOrganizationsByUserID(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 	GetParameterSchemasByJobID(ctx context.Context, jobID uuid.UUID) ([]ParameterSchema, error)
+	//
+	// TODO: create view for latest build!! WE NEED TO SEE INTERMEDIARY STATUSES, NOT JUST TERMINAL ONES.
+	//          i.e. when we list the unassigned prebuilds we must exclude the ones which are in the process of transferring
+	//
+	// we only consider workspaces which are not deleted, unassigned, and in any state
+	GetPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error)
 	GetPreviousTemplateVersion(ctx context.Context, arg GetPreviousTemplateVersionParams) (TemplateVersion, error)
 	GetProvisionerDaemons(ctx context.Context) ([]ProvisionerDaemon, error)
 	GetProvisionerDaemonsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ProvisionerDaemon, error)
@@ -262,13 +268,8 @@ type sqlcQuerier interface {
 	GetTemplateVersionsCreatedAfter(ctx context.Context, createdAt time.Time) ([]TemplateVersion, error)
 	GetTemplates(ctx context.Context) ([]Template, error)
 	GetTemplatesWithFilter(ctx context.Context, arg GetTemplatesWithFilterParams) ([]Template, error)
-	// TODO: add query to fetch pending builds
-	//
-	// TODO: create view for latest build!!
-	//
 	// we only consider workspaces which are not deleted, unassigned, and in a "stop" state
-	//   AND latest_build.transition = 'stop'::workspace_transition -- TODO: restore this once workspaces are stopped after successful prebuild boot
-	GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error)
+	GetUnassignedPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error)
 	GetUnexpiredLicenses(ctx context.Context) ([]License, error)
 	// GetUserActivityInsights returns the ranking with top active users.
 	// The result can be filtered on template_ids, meaning only user data

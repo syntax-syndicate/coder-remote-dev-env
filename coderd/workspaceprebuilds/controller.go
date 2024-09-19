@@ -186,6 +186,13 @@ func (m Controller) Run(ctx context.Context) error {
 		return err
 	}
 
+	cancelReconcile, err := m.pubsub.Subscribe(PrebuildReconcileChannel(), m.prebuildReconcileListener)
+	defer cancelReconcile()
+	if err != nil {
+		m.logger.Warn(ctx, "failed to subscribe to prebuild creations", slog.Error(err))
+		return err
+	}
+
 	// Reconcile state every 30s as a backup mechanism (state should already be reconciled using pubsub).
 	go m.reconcileLoop(ctx, time.Second*30)
 

@@ -352,7 +352,7 @@ export interface CreateWorkspaceRequest {
 	readonly ttl_ms?: number;
 	readonly rich_parameter_values?: Readonly<Array<WorkspaceBuildParameter>>;
 	readonly automatic_updates?: AutomaticUpdates;
-	readonly ignore_prebuild?: boolean;
+	readonly use_prebuild?: boolean;
 }
 
 // From codersdk/roles.go

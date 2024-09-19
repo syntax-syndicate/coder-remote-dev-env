@@ -9795,9 +9795,6 @@ const docTemplate = `{
                 "autostart_schedule": {
                     "type": "string"
                 },
-                "ignore_prebuild": {
-                    "type": "boolean"
-                },
                 "name": {
                     "type": "string"
                 },
@@ -9820,6 +9817,9 @@ const docTemplate = `{
                 },
                 "ttl_ms": {
                     "type": "integer"
+                },
+                "use_prebuild": {
+                    "type": "boolean"
                 }
             }
         },

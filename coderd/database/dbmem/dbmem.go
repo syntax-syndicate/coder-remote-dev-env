@@ -1050,6 +1050,10 @@ func (q *FakeQuerier) GetWorkspacesByPrebuildID(ctx context.Context, prebuildID 
 	panic("not implemented")
 }
 
+func (q *FakeQuerier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	panic("not implemented")
+}
+
 func (*FakeQuerier) AcquireLock(_ context.Context, _ int64) error {
 	return xerrors.New("AcquireLock must only be called within a transaction")
 }
@@ -3481,6 +3485,10 @@ func (q *FakeQuerier) GetParameterSchemasByJobID(_ context.Context, jobID uuid.U
 	return parameters, nil
 }
 
+func (q *FakeQuerier) GetPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	panic("not implemented")
+}
+
 func (q *FakeQuerier) GetPreviousTemplateVersion(_ context.Context, arg database.GetPreviousTemplateVersionParams) (database.TemplateVersion, error) {
 	if err := validateDatabaseType(arg); err != nil {
 		return database.TemplateVersion{}, err
@@ -5094,7 +5102,7 @@ func (q *FakeQuerier) GetTemplatesWithFilter(ctx context.Context, arg database.G
 	return q.GetAuthorizedTemplates(ctx, arg, nil)
 }
 
-func (q *FakeQuerier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+func (q *FakeQuerier) GetUnassignedPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
 	panic("not implemented")
 }
 

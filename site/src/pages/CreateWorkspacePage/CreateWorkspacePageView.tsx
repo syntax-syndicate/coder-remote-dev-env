@@ -42,6 +42,9 @@ import type {
 } from "./CreateWorkspacePage";
 import { ExternalAuthButton } from "./ExternalAuthButton";
 import type { CreateWSPermissions } from "./permissions";
+import {useDashboard} from "modules/dashboard/useDashboard";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
 
 export const Language = {
 	duplicationWarning:
@@ -92,10 +95,12 @@ export const CreateWorkspacePageView: FC<CreateWorkspacePageViewProps> = ({
 	onSubmit,
 	onCancel,
 }) => {
+	const {experiments} = useDashboard();
 	const [owner, setOwner] = useState(defaultOwner);
 	const [suggestedName, setSuggestedName] = useState(() =>
 		generateWorkspaceName(),
 	);
+	const [usePrebuild, setUsePrebuild] = useState(true);
 
 	const rerollSuggestedName = useCallback(() => {
 		setSuggestedName(() => generateWorkspaceName());
@@ -110,6 +115,7 @@ export const CreateWorkspacePageView: FC<CreateWorkspacePageViewProps> = ({
 					parameters,
 					autofillParameters,
 				),
+				use_prebuild: usePrebuild,
 			},
 			validationSchema: Yup.object({
 				name: nameValidator("Workspace Name"),
@@ -301,6 +307,25 @@ export const CreateWorkspacePageView: FC<CreateWorkspacePageViewProps> = ({
 									/>
 								);
 							})}
+						</FormFields>
+					</FormSection>
+				)}
+
+				{/* Conditionally render the checkbox */}
+				{experiments.includes("workspace-prebuilds") && (
+					<FormSection title="Prebuilds" description={"Prebuilds speed up workspace creation time"}>
+						<FormFields>
+							<FormControlLabel
+								control={
+									<Checkbox
+										checked={usePrebuild}
+										onChange={(_, checked) => {
+											setUsePrebuild(checked);
+										}}
+									/>
+								}
+								label="Use prebuild"
+							/>
 						</FormFields>
 					</FormSection>
 				)}

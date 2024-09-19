@@ -13,11 +13,12 @@ import (
 
 	"github.com/coder/pretty"
 
+	"github.com/coder/serpent"
+
 	"github.com/coder/coder/v2/cli/cliui"
 	"github.com/coder/coder/v2/coderd/util/ptr"
 	"github.com/coder/coder/v2/coderd/util/slice"
 	"github.com/coder/coder/v2/codersdk"
-	"github.com/coder/serpent"
 )
 
 func (r *RootCmd) create() *serpent.Command {
@@ -26,6 +27,7 @@ func (r *RootCmd) create() *serpent.Command {
 		startAt       string
 		stopAfter     time.Duration
 		workspaceName string
+		usePrebuild   bool
 
 		parameterFlags     workspaceParameterFlags
 		autoUpdates        string
@@ -287,6 +289,7 @@ func (r *RootCmd) create() *serpent.Command {
 				TTLMillis:           ttlMillis,
 				RichParameterValues: richParameters,
 				AutomaticUpdates:    codersdk.AutomaticUpdates(autoUpdates),
+				UsePrebuild:         usePrebuild,
 			})
 			if err != nil {
 				return xerrors.Errorf("create workspace: %w", err)
@@ -338,6 +341,12 @@ func (r *RootCmd) create() *serpent.Command {
 			Env:         "CODER_WORKSPACE_COPY_PARAMETERS_FROM",
 			Description: "Specify the source workspace name to copy parameters from.",
 			Value:       serpent.StringOf(&copyParametersFrom),
+		},
+		serpent.Option{
+			Flag:        "use-prebuild",
+			Env:         "CODER_WORKSPACE_USE_PREBUILD",
+			Description: "Use pre-built workspace to speed up workspace creation time.",
+			Value:       serpent.BoolOf(&usePrebuild),
 		},
 		cliui.SkipPromptOption(),
 	)

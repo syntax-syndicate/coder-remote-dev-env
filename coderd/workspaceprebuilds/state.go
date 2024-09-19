@@ -23,7 +23,8 @@ func (m Controller) ReconcileState(ctx context.Context, prebuildID uuid.UUID) er
 	}
 
 	// TODO: also check for workspaces which are in a transitionary state (i.e. created but building or failed)
-	workspaces, err := m.store.GetUnassignedWorkspacesByPrebuildID(ctx, prebuildID)
+	// WITHOUT THIS, WE WILL REPORT INCORRECT FIGURES AND PROVISION TOO MANY REPLICAS.
+	workspaces, err := m.store.GetPrebuildsByPoolID(ctx, prebuildID)
 	if err != nil {
 		return xerrors.Errorf("failed to load prebuild workspaces by ID %q: %w", prebuildID.String(), err)
 	}

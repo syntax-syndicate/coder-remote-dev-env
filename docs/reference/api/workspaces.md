@@ -25,7 +25,6 @@ of the template will be used.
 {
 	"automatic_updates": "always",
 	"autostart_schedule": "string",
-	"ignore_prebuild": true,
 	"name": "string",
 	"rich_parameter_values": [
 		{
@@ -35,7 +34,8 @@ of the template will be used.
 	],
 	"template_id": "c6d67e98-83ea-49f0-8812-e4abae2b68bc",
 	"template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
-	"ttl_ms": 0
+	"ttl_ms": 0,
+	"use_prebuild": true
 }
 ```
 
@@ -483,7 +483,6 @@ of the template will be used.
 {
 	"automatic_updates": "always",
 	"autostart_schedule": "string",
-	"ignore_prebuild": true,
 	"name": "string",
 	"rich_parameter_values": [
 		{
@@ -493,7 +492,8 @@ of the template will be used.
 	],
 	"template_id": "c6d67e98-83ea-49f0-8812-e4abae2b68bc",
 	"template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
-	"ttl_ms": 0
+	"ttl_ms": 0,
+	"use_prebuild": true
 }
 ```
 

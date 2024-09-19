@@ -13952,7 +13952,7 @@ func (q *sqlQuerier) GetMatchingPrebuilds(ctx context.Context, templateVersionID
 	return items, nil
 }
 
-const getUnassignedWorkspacesByPrebuildID = `-- name: GetUnassignedWorkspacesByPrebuildID :many
+const getPrebuildsByPoolID = `-- name: GetPrebuildsByPoolID :many
 
 SELECT w.id, w.created_at, w.updated_at, w.owner_id, w.organization_id, w.template_id, w.deleted, w.name, w.autostart_schedule, w.ttl, w.last_used_at, w.dormant_at, w.deleting_at, w.automatic_updates, w.favorite, w.prebuild_id, w.prebuild_assigned
 FROM workspace_prebuild_pool wpp
@@ -13975,15 +13975,78 @@ WHERE w.deleted = false
 GROUP BY latest_build.transition, w.id
 `
 
-// TODO: add query to fetch pending builds
+// TODO: create view for latest build!! WE NEED TO SEE INTERMEDIARY STATUSES, NOT JUST TERMINAL ONES.
 //
-// TODO: create view for latest build!!
+//	i.e. when we list the unassigned prebuilds we must exclude the ones which are in the process of transferring
 //
+// we only consider workspaces which are not deleted, unassigned, and in any state
+func (q *sqlQuerier) GetPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error) {
+	rows, err := q.db.QueryContext(ctx, getPrebuildsByPoolID, prebuildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Workspace
+	for rows.Next() {
+		var i Workspace
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OwnerID,
+			&i.OrganizationID,
+			&i.TemplateID,
+			&i.Deleted,
+			&i.Name,
+			&i.AutostartSchedule,
+			&i.Ttl,
+			&i.LastUsedAt,
+			&i.DormantAt,
+			&i.DeletingAt,
+			&i.AutomaticUpdates,
+			&i.Favorite,
+			&i.PrebuildID,
+			&i.PrebuildAssigned,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUnassignedPrebuildsByPoolID = `-- name: GetUnassignedPrebuildsByPoolID :many
+SELECT w.id, w.created_at, w.updated_at, w.owner_id, w.organization_id, w.template_id, w.deleted, w.name, w.autostart_schedule, w.ttl, w.last_used_at, w.dormant_at, w.deleting_at, w.automatic_updates, w.favorite, w.prebuild_id, w.prebuild_assigned
+FROM workspace_prebuild_pool wpp
+         INNER JOIN workspaces w ON wpp.id = w.prebuild_id
+         INNER JOIN LATERAL (
+    SELECT wb.transition
+    FROM workspace_builds wb
+             LEFT JOIN provisioner_jobs pj ON pj.id = wb.job_id
+    WHERE wb.workspace_id = w.id
+      -- we only consider workspaces which are fully built
+      AND pj.completed_at IS NOT NULL
+      AND pj.canceled_at IS NULL
+      AND pj.error IS NULL
+    ORDER BY build_number DESC
+    LIMIT 1
+    ) latest_build ON TRUE
+WHERE w.deleted = false
+  AND w.prebuild_id = $1::uuid
+  AND w.prebuild_assigned = false
+  AND latest_build.transition = 'stop'::workspace_transition
+GROUP BY latest_build.transition, w.id
+`
+
 // we only consider workspaces which are not deleted, unassigned, and in a "stop" state
-//
-//	AND latest_build.transition = 'stop'::workspace_transition -- TODO: restore this once workspaces are stopped after successful prebuild boot
-func (q *sqlQuerier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error) {
-	rows, err := q.db.QueryContext(ctx, getUnassignedWorkspacesByPrebuildID, prebuildID)
+func (q *sqlQuerier) GetUnassignedPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]Workspace, error) {
+	rows, err := q.db.QueryContext(ctx, getUnassignedPrebuildsByPoolID, prebuildID)
 	if err != nil {
 		return nil, err
 	}

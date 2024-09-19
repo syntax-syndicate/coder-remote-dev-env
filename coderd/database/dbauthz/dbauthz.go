@@ -1791,6 +1791,12 @@ func (q *querier) GetParameterSchemasByJobID(ctx context.Context, jobID uuid.UUI
 	return q.db.GetParameterSchemasByJobID(ctx, jobID)
 }
 
+func (q *querier) GetPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+	// TODO: auth
+	// Maybe only check org visibility, because all users should be able to read workspace prebuilds since they're about to own one.
+	return q.db.GetPrebuildsByPoolID(ctx, prebuildID)
+}
+
 func (q *querier) GetPreviousTemplateVersion(ctx context.Context, arg database.GetPreviousTemplateVersionParams) (database.TemplateVersion, error) {
 	// An actor can read the previous template version if they can read the related template.
 	// If no linked template exists, we check if the actor can read *a* template.
@@ -2207,11 +2213,11 @@ func (q *querier) GetTemplatesWithFilter(ctx context.Context, arg database.GetTe
 	return q.db.GetAuthorizedTemplates(ctx, arg, prep)
 }
 
-func (q *querier) GetUnassignedWorkspacesByPrebuildID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
+func (q *querier) GetUnassignedPrebuildsByPoolID(ctx context.Context, prebuildID uuid.UUID) ([]database.Workspace, error) {
 	// TODO: auth
 	// Maybe only check org visibility, because all users should be able to read workspace prebuilds since they're about to own one.
-	// return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetWorkspacesByPrebuildID)(ctx, prebuildID)
-	return q.db.GetUnassignedWorkspacesByPrebuildID(ctx, prebuildID)
+	// return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetUnassignedPrebuildsByPoolID)(ctx, prebuildID)
+	return q.db.GetUnassignedPrebuildsByPoolID(ctx, prebuildID)
 }
 
 func (q *querier) GetUnexpiredLicenses(ctx context.Context) ([]database.License, error) {

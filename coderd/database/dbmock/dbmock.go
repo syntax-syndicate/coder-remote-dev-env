@@ -1928,6 +1928,21 @@ func (mr *MockStoreMockRecorder) GetParameterSchemasByJobID(arg0, arg1 any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetParameterSchemasByJobID", reflect.TypeOf((*MockStore)(nil).GetParameterSchemasByJobID), arg0, arg1)
 }
 
+// GetPrebuildsByPoolID mocks base method.
+func (m *MockStore) GetPrebuildsByPoolID(arg0 context.Context, arg1 uuid.UUID) ([]database.Workspace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPrebuildsByPoolID", arg0, arg1)
+	ret0, _ := ret[0].([]database.Workspace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPrebuildsByPoolID indicates an expected call of GetPrebuildsByPoolID.
+func (mr *MockStoreMockRecorder) GetPrebuildsByPoolID(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPrebuildsByPoolID", reflect.TypeOf((*MockStore)(nil).GetPrebuildsByPoolID), arg0, arg1)
+}
+
 // GetPreviousTemplateVersion mocks base method.
 func (m *MockStore) GetPreviousTemplateVersion(arg0 context.Context, arg1 database.GetPreviousTemplateVersionParams) (database.TemplateVersion, error) {
 	m.ctrl.T.Helper()
@@ -2618,19 +2633,19 @@ func (mr *MockStoreMockRecorder) GetTemplatesWithFilter(arg0, arg1 any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTemplatesWithFilter", reflect.TypeOf((*MockStore)(nil).GetTemplatesWithFilter), arg0, arg1)
 }
 
-// GetUnassignedWorkspacesByPrebuildID mocks base method.
-func (m *MockStore) GetUnassignedWorkspacesByPrebuildID(arg0 context.Context, arg1 uuid.UUID) ([]database.Workspace, error) {
+// GetUnassignedPrebuildsByPoolID mocks base method.
+func (m *MockStore) GetUnassignedPrebuildsByPoolID(arg0 context.Context, arg1 uuid.UUID) ([]database.Workspace, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUnassignedWorkspacesByPrebuildID", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetUnassignedPrebuildsByPoolID", arg0, arg1)
 	ret0, _ := ret[0].([]database.Workspace)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetUnassignedWorkspacesByPrebuildID indicates an expected call of GetUnassignedWorkspacesByPrebuildID.
-func (mr *MockStoreMockRecorder) GetUnassignedWorkspacesByPrebuildID(arg0, arg1 any) *gomock.Call {
+// GetUnassignedPrebuildsByPoolID indicates an expected call of GetUnassignedPrebuildsByPoolID.
+func (mr *MockStoreMockRecorder) GetUnassignedPrebuildsByPoolID(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnassignedWorkspacesByPrebuildID", reflect.TypeOf((*MockStore)(nil).GetUnassignedWorkspacesByPrebuildID), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnassignedPrebuildsByPoolID", reflect.TypeOf((*MockStore)(nil).GetUnassignedPrebuildsByPoolID), arg0, arg1)
 }
 
 // GetUnexpiredLicenses mocks base method.

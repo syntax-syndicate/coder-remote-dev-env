@@ -56,26 +56,28 @@ func (api *API) publishWorkspacePrebuildReady(ctx context.Context, workspaceID u
 func (api *API) assignPrebuildToUser(ctx context.Context, r *http.Request, req codersdk.CreateWorkspaceRequest, owner workspaceOwner) (*database.WorkspaceBuild, *database.ProvisionerJob, bool, error) {
 	// Check for, and optionally use, a prebuilt workspace.
 	// TODO: handle req.TemplateID being set but not req.TemplateVersionID
-	prebuild, err := api.findMatchingPrebuild(ctx, req.TemplateVersionID, req.RichParameterValues) // TODO: what if no TemplateVersionID given?
-	if err != nil || prebuild == nil {
+	prebuildPool, err := api.findMatchingPrebuild(ctx, req.TemplateVersionID, req.RichParameterValues) // TODO: what if no TemplateVersionID given?
+	if err != nil || prebuildPool == nil {
 		api.Logger.Warn(ctx, "failed to find matching prebuilds", slog.Error(err))
 		return nil, nil, false, nil
 	}
 
-	if req.IgnorePrebuild {
-		api.Logger.Info(ctx, "prebuild found, but not used - per request", slog.F("prebuild_id", prebuild.ID))
+	logger := api.Logger.With(slog.F("prebuild_pool_id", prebuildPool.ID))
+
+	if !req.UsePrebuild {
+		logger.Info(ctx, "prebuild found, but not used - per request")
 		return nil, nil, false, nil
 	}
 
 	// nominate prebuilt workspace for transfer
-	workspaces, err := api.Database.GetUnassignedWorkspacesByPrebuildID(ctx, prebuild.ID)
+	workspaces, err := api.Database.GetUnassignedPrebuildsByPoolID(ctx, prebuildPool.ID)
 	if err != nil {
-		api.Logger.Warn(ctx, "failed to load workspaces for prebuild", slog.F("prebuild_id", prebuild.ID), slog.Error(err))
+		logger.Warn(ctx, "failed to load workspaces for prebuild", slog.Error(err))
 		return nil, nil, false, nil
 	}
 
 	if len(workspaces) == 0 {
-		api.Logger.Warn(ctx, "no available prebuild workspaces", slog.F("prebuild_id", prebuild.ID))
+		logger.Warn(ctx, "no available prebuild workspaces")
 		return nil, nil, false, nil
 	}
 
@@ -126,6 +128,11 @@ func (api *API) assignPrebuildToUser(ctx context.Context, r *http.Request, req c
 		api.Logger.Warn(ctx, "failed to rename prebuild workspace",
 			slog.F("prebuild_id", victim.ID.String()), slog.F("name", req.Name))
 	}
+
+	logger.Info(ctx, "prebuild assigning to new owner", slog.F("new_owner_id", owner.ID))
+
+	// Trigger a reconciliation.
+	_ = api.Pubsub.Publish(workspaceprebuilds.PrebuildReconcileChannel(), []byte(prebuildPool.ID.String()))
 
 	return workspaceBuild, provisionerJob, true, err
 }

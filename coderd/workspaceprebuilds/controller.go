@@ -193,8 +193,8 @@ func (m Controller) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Reconcile state every 30s as a backup mechanism (state should already be reconciled using pubsub).
-	go m.reconcileLoop(ctx, time.Second*30)
+	// Reconcile state every 10s as a backup mechanism (state should already be reconciled using pubsub).
+	go m.reconcileLoop(ctx, time.Second*10)
 
 	// Wait until context is canceled or Manager is stopped.
 	select {

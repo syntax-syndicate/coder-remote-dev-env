@@ -6,14 +6,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreateWorkspacePrebuildRequest struct {
+type CreateWorkspacePrebuildPoolRequest struct {
 	CreatedBy           uuid.UUID                    // Only settable by the API handler.
 	TemplateID          uuid.UUID                    `json:"template_id" validate:"required" format:"uuid"`
 	TemplateVersionID   uuid.UUID                    `json:"template_version_id" validate:"required" format:"uuid"`
 	OrganizationID      uuid.UUID                    // Only settable by the API handler.
 	Name                string                       `json:"name" validate:"workspace_prebuild_name,required"`
 	RichParameterValues []WorkspacePrebuildParameter `json:"rich_parameter_values,omitempty"`
-	Count               int                          `json:"replicas" validate:"required"`
+	Count               int                          `json:"count" validate:"required"`
 }
 
 type WorkspacePrebuildPool struct {

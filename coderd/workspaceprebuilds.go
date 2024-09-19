@@ -26,7 +26,7 @@ func (api *API) postWorkspacePrebuilds(rw http.ResponseWriter, r *http.Request) 
 	org := httpmw.OrganizationParam(r)
 
 	// prebuild := httpmw.WorkspacePrebuildParam(r)
-	var createPrebuild codersdk.CreateWorkspacePrebuildRequest
+	var createPrebuild codersdk.CreateWorkspacePrebuildPoolRequest
 	if !httpapi.Read(ctx, rw, r, &createPrebuild) {
 		return
 	}

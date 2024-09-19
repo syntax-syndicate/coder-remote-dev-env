@@ -66,6 +66,15 @@ Specify automatic updates setting for the workspace (accepts 'always' or 'never'
 
 Specify the source workspace name to copy parameters from.
 
+### --use-prebuild
+
+|             |                                            |
+| ----------- | ------------------------------------------ |
+| Type        | <code>bool</code>                          |
+| Environment | <code>$CODER_WORKSPACE_USE_PREBUILD</code> |
+
+Use pre-built workspace to speed up workspace creation time.
+
 ### -y, --yes
 
 |      |                   |

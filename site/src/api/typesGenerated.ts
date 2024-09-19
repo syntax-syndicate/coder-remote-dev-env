@@ -326,14 +326,14 @@ export interface CreateWorkspaceBuildRequest {
 }
 
 // From codersdk/workspaceprebuilds.go
-export interface CreateWorkspacePrebuildRequest {
+export interface CreateWorkspacePrebuildPoolRequest {
 	readonly CreatedBy: string;
 	readonly template_id: string;
 	readonly template_version_id: string;
 	readonly OrganizationID: string;
 	readonly name: string;
 	readonly rich_parameter_values?: Readonly<Array<WorkspacePrebuildParameter>>;
-	readonly replicas: number;
+	readonly count: number;
 }
 
 // From codersdk/workspaceproxy.go

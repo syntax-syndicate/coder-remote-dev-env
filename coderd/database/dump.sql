@@ -34,7 +34,8 @@ CREATE TYPE build_reason AS ENUM (
     'dormancy',
     'failedstop',
     'autodelete',
-    'transfer'
+    'transfer',
+    'prebuild_ready'
 );
 
 CREATE TYPE crypto_key_feature AS ENUM (

@@ -38,6 +38,8 @@ import (
 	"tailscale.com/util/clientmetric"
 
 	"cdr.dev/slog"
+	"github.com/coder/retry"
+
 	"github.com/coder/coder/v2/agent/agentproc"
 	"github.com/coder/coder/v2/agent/agentscripts"
 	"github.com/coder/coder/v2/agent/agentssh"
@@ -51,7 +53,6 @@ import (
 	"github.com/coder/coder/v2/codersdk/workspacesdk"
 	"github.com/coder/coder/v2/tailnet"
 	tailnetproto "github.com/coder/coder/v2/tailnet/proto"
-	"github.com/coder/retry"
 )
 
 const (
@@ -952,7 +953,7 @@ func (a *agent) handleManifest(manifestOK *checkpoint) func(ctx context.Context,
 				err := a.scriptRunner.Execute(a.gracefulCtx, func(script codersdk.WorkspaceAgentScript) bool {
 					return script.RunOnStart
 				})
-				// Measure the time immediately after the script has finished
+				// Measure the time immediately after the scripts have finished
 				dur := time.Since(start).Seconds()
 				if err != nil {
 					a.logger.Warn(ctx, "startup script(s) failed", slog.Error(err))
@@ -962,6 +963,17 @@ func (a *agent) handleManifest(manifestOK *checkpoint) func(ctx context.Context,
 						a.setLifecycle(codersdk.WorkspaceAgentLifecycleStartError)
 					}
 				} else {
+					// At this point, the workspace is ready to use. If this is a prebuild, then this is a trigger to
+					// transition the workspace into a stopped state.
+					// TODO: this may not be the correct time to do this because we just filter on script.RunOnStart above and
+					//		 not script.StartBlocksLogin above?
+					// TODO: instead inject workspace ID here into request rather than reading agent/workspace in MarkWorkspacePrebuildReady func?
+					// TODO: only execute if workspace is a prebuild? does it matter?
+					_, err = aAPI.MarkWorkspacePrebuildReady(ctx, &proto.MarkWorkspacePrebuildReadyRequest{})
+					if err != nil {
+						a.logger.Warn(ctx, "failed to publish workspace prebuild ready event", slog.Error(err), slog.F("workspace_id", manifest.WorkspaceID))
+					}
+
 					a.setLifecycle(codersdk.WorkspaceAgentLifecycleReady)
 				}
 

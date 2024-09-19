@@ -272,13 +272,14 @@ func AllAutomaticUpdatesValues() []AutomaticUpdates {
 type BuildReason string
 
 const (
-	BuildReasonInitiator  BuildReason = "initiator"
-	BuildReasonAutostart  BuildReason = "autostart"
-	BuildReasonAutostop   BuildReason = "autostop"
-	BuildReasonDormancy   BuildReason = "dormancy"
-	BuildReasonFailedstop BuildReason = "failedstop"
-	BuildReasonAutodelete BuildReason = "autodelete"
-	BuildReasonTransfer   BuildReason = "transfer"
+	BuildReasonInitiator     BuildReason = "initiator"
+	BuildReasonAutostart     BuildReason = "autostart"
+	BuildReasonAutostop      BuildReason = "autostop"
+	BuildReasonDormancy      BuildReason = "dormancy"
+	BuildReasonFailedstop    BuildReason = "failedstop"
+	BuildReasonAutodelete    BuildReason = "autodelete"
+	BuildReasonTransfer      BuildReason = "transfer"
+	BuildReasonPrebuildReady BuildReason = "prebuild_ready"
 )
 
 func (e *BuildReason) Scan(src interface{}) error {
@@ -324,7 +325,8 @@ func (e BuildReason) Valid() bool {
 		BuildReasonDormancy,
 		BuildReasonFailedstop,
 		BuildReasonAutodelete,
-		BuildReasonTransfer:
+		BuildReasonTransfer,
+		BuildReasonPrebuildReady:
 		return true
 	}
 	return false
@@ -339,6 +341,7 @@ func AllBuildReasonValues() []BuildReason {
 		BuildReasonFailedstop,
 		BuildReasonAutodelete,
 		BuildReasonTransfer,
+		BuildReasonPrebuildReady,
 	}
 }
 

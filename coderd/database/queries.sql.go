@@ -14049,10 +14049,12 @@ func (q *sqlQuerier) GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID)
 }
 
 const getWorkspacePrebuilds = `-- name: GetWorkspacePrebuilds :many
+
 SELECT id, name, count, organization_id, template_id, template_version_id, parameters, ignored_parameters, created_by, created_at, updated_at
 FROM workspace_prebuild_pool
 `
 
+// TODO: rename these to have Pool suffix
 func (q *sqlQuerier) GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuildPool, error) {
 	rows, err := q.db.QueryContext(ctx, getWorkspacePrebuilds)
 	if err != nil {

@@ -38,7 +38,7 @@ func transferWorkspace(ctx context.Context, dbInTx database.Store, req workspace
 	}
 
 	// Rebuild workspace with new ownership.
-	builder := wsbuilder.New(workspace, database.WorkspaceTransitionStop).
+	builder := wsbuilder.New(workspace, database.WorkspaceTransitionStart).
 		Reason(database.BuildReasonTransfer).
 		Initiator(req.newOwnerID).
 		ActiveVersion(). // TODO: always require active version?

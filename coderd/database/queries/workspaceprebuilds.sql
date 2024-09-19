@@ -10,6 +10,8 @@ ON CONFLICT (id) DO UPDATE
         created_by          = @created_by
 RETURNING *;
 
+-- TODO: rename these to have Pool suffix
+
 -- name: GetWorkspacePrebuilds :many
 SELECT *
 FROM workspace_prebuild_pool;

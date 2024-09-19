@@ -20,3 +20,5 @@ CREATE TABLE workspace_prebuild_pool
 ALTER TABLE workspaces
     ADD COLUMN IF NOT EXISTS prebuild_id       uuid NULL REFERENCES workspace_prebuild_pool (id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS prebuild_assigned bool NULL; -- this field is nullable because it only makes sense if prebuild_id is set
+
+ALTER TYPE build_reason ADD VALUE IF NOT EXISTS 'prebuild_ready';

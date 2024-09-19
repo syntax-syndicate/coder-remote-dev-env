@@ -17,6 +17,7 @@ import (
 	"nhooyr.io/websocket"
 
 	"cdr.dev/slog"
+
 	"github.com/coder/coder/v2/agent/proto"
 	"github.com/coder/coder/v2/coderd/agentapi"
 	"github.com/coder/coder/v2/coderd/database"
@@ -148,6 +149,7 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 		StatsReporter:                     api.statsReporter,
 		PublishWorkspaceUpdateFn:          api.publishWorkspaceUpdate,
 		PublishWorkspaceAgentLogsUpdateFn: api.publishWorkspaceAgentLogsUpdate,
+		PublishWorkspacePrebuildReadyFn:   api.publishWorkspacePrebuildReady,
 		NetworkTelemetryHandler:           api.NetworkTelemetryBatcher.Handler,
 
 		AccessURL:                 api.AccessURL,

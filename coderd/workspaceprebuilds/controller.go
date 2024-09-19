@@ -27,7 +27,6 @@ import (
 // TODO: use different name to describe the prebuild definition and the workspace prebuild; terminology is currently confusing.
 
 // Controller TODO
-// TODO: this might not be the best name since it could be confused with the other "coordinator" concepts in tailnet package.
 type Controller struct {
 	stopping chan any
 
@@ -180,8 +179,15 @@ func (m Controller) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Reconcile state every 10s as a backup mechanism (state should already be reconciled using pubsub).
-	go m.reconcileLoop(ctx, time.Second*10)
+	cancelReady, err := m.pubsub.SubscribeWithErr(PrebuildReadyChannel(), m.prebuildReadyListener)
+	defer cancelReady()
+	if err != nil {
+		m.logger.Warn(ctx, "failed to subscribe to prebuild creations", slog.Error(err))
+		return err
+	}
+
+	// Reconcile state every 30s as a backup mechanism (state should already be reconciled using pubsub).
+	go m.reconcileLoop(ctx, time.Second*30)
 
 	// Wait until context is canceled or Manager is stopped.
 	select {

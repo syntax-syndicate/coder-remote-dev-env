@@ -16,6 +16,7 @@ import (
 	"tailscale.com/tailcfg"
 
 	"cdr.dev/slog"
+
 	agentproto "github.com/coder/coder/v2/agent/proto"
 	"github.com/coder/coder/v2/coderd/appearance"
 	"github.com/coder/coder/v2/coderd/database"
@@ -43,6 +44,7 @@ type API struct {
 	*MetadataAPI
 	*LogsAPI
 	*tailnet.DRPCService
+	*WorkspacePrebuildsAPI
 
 	mu                sync.Mutex
 	cachedWorkspaceID uuid.UUID
@@ -63,6 +65,7 @@ type Options struct {
 	AppearanceFetcher                 *atomic.Pointer[appearance.Fetcher]
 	PublishWorkspaceUpdateFn          func(ctx context.Context, workspaceID uuid.UUID)
 	PublishWorkspaceAgentLogsUpdateFn func(ctx context.Context, workspaceAgentID uuid.UUID, msg agentsdk.LogsNotifyMessage)
+	PublishWorkspacePrebuildReadyFn   func(ctx context.Context, workspaceID uuid.UUID)
 	NetworkTelemetryHandler           func(batch []*tailnetproto.TelemetryEvent)
 
 	AccessURL                 *url.URL
@@ -158,6 +161,12 @@ func New(opts Options) *API {
 		DerpMapUpdateFrequency:  opts.DerpMapUpdateFrequency,
 		DerpMapFn:               opts.DerpMapFn,
 		NetworkTelemetryHandler: opts.NetworkTelemetryHandler,
+	}
+
+	api.WorkspacePrebuildsAPI = &WorkspacePrebuildsAPI{
+		AgentFn:                  api.agent,
+		WorkspaceIDFn:            api.workspaceID,
+		PublishWorkspacePrebuildReadyFn: opts.PublishWorkspacePrebuildReadyFn,
 	}
 
 	return api

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"slices"
 	"strconv"
@@ -2161,81 +2160,4 @@ func (api *API) findMatchingPrebuild(ctx context.Context, templateVersionID uuid
 	}
 
 	return match, nil
-}
-
-func (api *API) assignPrebuildToUser(ctx context.Context, r *http.Request, req codersdk.CreateWorkspaceRequest, owner workspaceOwner) (*database.WorkspaceBuild, *database.ProvisionerJob, bool, error) {
-	// Check for, and optionally use, a prebuilt workspace.
-	// TODO: handle req.TemplateID being set but not req.TemplateVersionID
-	prebuild, err := api.findMatchingPrebuild(ctx, req.TemplateVersionID, req.RichParameterValues) // TODO: what if no TemplateVersionID given?
-	if err != nil || prebuild == nil {
-		api.Logger.Warn(ctx, "failed to find matching prebuilds", slog.Error(err))
-		return nil, nil, false, nil
-	}
-
-	if req.IgnorePrebuild {
-		api.Logger.Info(ctx, "prebuild found, but not used - per request", slog.F("prebuild_id", prebuild.ID))
-		return nil, nil, false, nil
-	}
-
-	// nominate prebuilt workspace for transfer
-	workspaces, err := api.Database.GetUnassignedWorkspacesByPrebuildID(ctx, prebuild.ID)
-	if err != nil {
-		api.Logger.Warn(ctx, "failed to load workspaces for prebuild", slog.F("prebuild_id", prebuild.ID), slog.Error(err))
-		return nil, nil, false, nil
-	}
-
-	if len(workspaces) == 0 {
-		api.Logger.Warn(ctx, "no available prebuild workspaces", slog.F("prebuild_id", prebuild.ID))
-		return nil, nil, false, nil
-	}
-
-	// pick random victim workspace
-	victim := workspaces[rand.Intn(len(workspaces))]
-
-	// transfer victim to new owner
-	var (
-		workspaceBuild *database.WorkspaceBuild
-		provisionerJob *database.ProvisionerJob
-	)
-
-	err = api.Database.InTx(func(db database.Store) error {
-		// Prospectively mark the prebuild as reassigned to the new owner.
-		// If the transfer fails to complete, this will get rolled back.
-		err = api.Database.MarkWorkspacePrebuildAssigned(ctx, victim.ID)
-		if err != nil {
-			return xerrors.Errorf("mark prebuild workspace as reassigned: %w", err)
-		}
-
-		// Transfer the prebuild workspace to the new owner.
-		workspaceBuild, provisionerJob, err = transferWorkspace(ctx, db, workspaceTransferRequest{
-			workspaceID:  victim.ID,
-			newOwnerID:   owner.ID,
-			richParams:   nil, // TODO: params
-			auditBaggage: audit.WorkspaceBuildBaggageFromRequest(r),
-		}, func(action policy.Action, object rbac.Objecter) bool {
-			return api.Authorize(r, action, object)
-		})
-		if err != nil {
-			return xerrors.Errorf("transfer workspace: %w", err)
-		}
-
-		return nil
-	}, nil)
-
-	if err != nil {
-		return nil, nil, true, err
-	}
-
-	// Wait until tx completes because a) renaming mustn't fail the tx and b) we need the auth context to update so it works
-	_, err = api.Database.UpdateWorkspace(ctx, database.UpdateWorkspaceParams{
-		ID:   victim.ID,
-		Name: req.Name,
-	})
-	if err != nil {
-		// Don't fail the operation, this is just a renaming.
-		api.Logger.Warn(ctx, "failed to rename prebuild workspace",
-			slog.F("prebuild_id", victim.ID.String()), slog.F("name", req.Name))
-	}
-
-	return workspaceBuild, provisionerJob, true, err
 }

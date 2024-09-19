@@ -330,6 +330,7 @@ type sqlcQuerier interface {
 	GetWorkspaceByOwnerIDAndName(ctx context.Context, arg GetWorkspaceByOwnerIDAndNameParams) (Workspace, error)
 	GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceAppID uuid.UUID) (Workspace, error)
 	GetWorkspacePrebuildByID(ctx context.Context, id uuid.UUID) (WorkspacePrebuildPool, error)
+	// TODO: rename these to have Pool suffix
 	GetWorkspacePrebuilds(ctx context.Context) ([]WorkspacePrebuildPool, error)
 	GetWorkspaceProxies(ctx context.Context) ([]WorkspaceProxy, error)
 	// Finds a workspace proxy that has an access URL or app hostname that matches

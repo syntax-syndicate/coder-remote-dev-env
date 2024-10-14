@@ -1,14 +1,15 @@
 package database
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"golang.org/x/oauth2"
 	"golang.org/x/xerrors"
 
@@ -457,6 +458,21 @@ func (r GetAuthorizationUserRolesRow) RoleNames() ([]rbac.RoleIdentifier, error)
 
 func (k CryptoKey) ExpiresAt(keyDuration time.Duration) time.Time {
 	return k.StartsAt.Add(keyDuration).UTC()
+}
+
+func (k CryptoKey) DecodeString() ([]byte, error) {
+	return hex.DecodeString(k.Secret.String)
+}
+
+func (k CryptoKey) CanSign(now time.Time) bool {
+	isAfterStart := !k.StartsAt.IsZero() && !now.Before(k.StartsAt)
+	return isAfterStart && k.CanVerify(now)
+}
+
+func (k CryptoKey) CanVerify(now time.Time) bool {
+	hasSecret := k.Secret.Valid
+	isBeforeDeletion := !k.DeletesAt.Valid || now.Before(k.DeletesAt.Time)
+	return hasSecret && isBeforeDeletion
 }
 
 type WorkspacePrebuildParameter struct {

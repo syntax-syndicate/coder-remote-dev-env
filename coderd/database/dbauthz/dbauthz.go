@@ -1405,6 +1405,13 @@ func (q *querier) GetCryptoKeys(ctx context.Context) ([]database.CryptoKey, erro
 	return q.db.GetCryptoKeys(ctx)
 }
 
+func (q *querier) GetCryptoKeysByFeature(ctx context.Context, feature database.CryptoKeyFeature) ([]database.CryptoKey, error) {
+	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceCryptoKey); err != nil {
+		return nil, err
+	}
+	return q.db.GetCryptoKeysByFeature(ctx, feature)
+}
+
 func (q *querier) GetDBCryptKeys(ctx context.Context) ([]database.DBCryptKey, error) {
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
 		return nil, err
@@ -2432,6 +2439,13 @@ func (q *querier) GetWorkspaceAgentPortShare(ctx context.Context, arg database.G
 	return q.db.GetWorkspaceAgentPortShare(ctx, arg)
 }
 
+func (q *querier) GetWorkspaceAgentScriptTimingsByBuildID(ctx context.Context, id uuid.UUID) ([]database.GetWorkspaceAgentScriptTimingsByBuildIDRow, error) {
+	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
+		return nil, err
+	}
+	return q.db.GetWorkspaceAgentScriptTimingsByBuildID(ctx, id)
+}
+
 func (q *querier) GetWorkspaceAgentScriptsByAgentIDs(ctx context.Context, ids []uuid.UUID) ([]database.WorkspaceAgentScript, error) {
 	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
 		return nil, err
@@ -3055,6 +3069,13 @@ func (q *querier) InsertWorkspaceAgentMetadata(ctx context.Context, arg database
 	return q.db.InsertWorkspaceAgentMetadata(ctx, arg)
 }
 
+func (q *querier) InsertWorkspaceAgentScriptTimings(ctx context.Context, arg database.InsertWorkspaceAgentScriptTimingsParams) (database.WorkspaceAgentScriptTiming, error) {
+	if err := q.authorizeContext(ctx, policy.ActionCreate, rbac.ResourceSystem); err != nil {
+		return database.WorkspaceAgentScriptTiming{}, err
+	}
+	return q.db.InsertWorkspaceAgentScriptTimings(ctx, arg)
+}
+
 func (q *querier) InsertWorkspaceAgentScripts(ctx context.Context, arg database.InsertWorkspaceAgentScriptsParams) ([]database.WorkspaceAgentScript, error) {
 	if err := q.authorizeContext(ctx, policy.ActionCreate, rbac.ResourceSystem); err != nil {
 		return []database.WorkspaceAgentScript{}, err
@@ -3650,6 +3671,14 @@ func (q *querier) UpdateUserGithubComUserID(ctx context.Context, arg database.Up
 		}
 	}
 	return q.db.UpdateUserGithubComUserID(ctx, arg)
+}
+
+func (q *querier) UpdateUserHashedOneTimePasscode(ctx context.Context, arg database.UpdateUserHashedOneTimePasscodeParams) error {
+	if err := q.authorizeContext(ctx, policy.ActionUpdate, rbac.ResourceSystem); err != nil {
+		return err
+	}
+
+	return q.db.UpdateUserHashedOneTimePasscode(ctx, arg)
 }
 
 func (q *querier) UpdateUserHashedPassword(ctx context.Context, arg database.UpdateUserHashedPasswordParams) error {

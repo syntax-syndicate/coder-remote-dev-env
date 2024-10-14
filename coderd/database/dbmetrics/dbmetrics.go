@@ -564,6 +564,13 @@ func (m metricsStore) GetCryptoKeys(ctx context.Context) ([]database.CryptoKey, 
 	return r0, r1
 }
 
+func (m metricsStore) GetCryptoKeysByFeature(ctx context.Context, feature database.CryptoKeyFeature) ([]database.CryptoKey, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetCryptoKeysByFeature(ctx, feature)
+	m.queryLatencies.WithLabelValues("GetCryptoKeysByFeature").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetDBCryptKeys(ctx context.Context) ([]database.DBCryptKey, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetDBCryptKeys(ctx)
@@ -1418,6 +1425,13 @@ func (m metricsStore) GetWorkspaceAgentPortShare(ctx context.Context, arg databa
 	return r0, r1
 }
 
+func (m metricsStore) GetWorkspaceAgentScriptTimingsByBuildID(ctx context.Context, id uuid.UUID) ([]database.GetWorkspaceAgentScriptTimingsByBuildIDRow, error) {
+	start := time.Now()
+	r0, r1 := m.s.GetWorkspaceAgentScriptTimingsByBuildID(ctx, id)
+	m.queryLatencies.WithLabelValues("GetWorkspaceAgentScriptTimingsByBuildID").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) GetWorkspaceAgentScriptsByAgentIDs(ctx context.Context, ids []uuid.UUID) ([]database.WorkspaceAgentScript, error) {
 	start := time.Now()
 	r0, r1 := m.s.GetWorkspaceAgentScriptsByAgentIDs(ctx, ids)
@@ -1964,6 +1978,13 @@ func (m metricsStore) InsertWorkspaceAgentMetadata(ctx context.Context, arg data
 	return err
 }
 
+func (m metricsStore) InsertWorkspaceAgentScriptTimings(ctx context.Context, arg database.InsertWorkspaceAgentScriptTimingsParams) (database.WorkspaceAgentScriptTiming, error) {
+	start := time.Now()
+	r0, r1 := m.s.InsertWorkspaceAgentScriptTimings(ctx, arg)
+	m.queryLatencies.WithLabelValues("InsertWorkspaceAgentScriptTimings").Observe(time.Since(start).Seconds())
+	return r0, r1
+}
+
 func (m metricsStore) InsertWorkspaceAgentScripts(ctx context.Context, arg database.InsertWorkspaceAgentScriptsParams) ([]database.WorkspaceAgentScript, error) {
 	start := time.Now()
 	r0, r1 := m.s.InsertWorkspaceAgentScripts(ctx, arg)
@@ -2339,6 +2360,13 @@ func (m metricsStore) UpdateUserGithubComUserID(ctx context.Context, arg databas
 	start := time.Now()
 	r0 := m.s.UpdateUserGithubComUserID(ctx, arg)
 	m.queryLatencies.WithLabelValues("UpdateUserGithubComUserID").Observe(time.Since(start).Seconds())
+	return r0
+}
+
+func (m metricsStore) UpdateUserHashedOneTimePasscode(ctx context.Context, arg database.UpdateUserHashedOneTimePasscodeParams) error {
+	start := time.Now()
+	r0 := m.s.UpdateUserHashedOneTimePasscode(ctx, arg)
+	m.queryLatencies.WithLabelValues("UpdateUserHashedOneTimePasscode").Observe(time.Since(start).Seconds())
 	return r0
 }
 

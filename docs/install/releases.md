@@ -7,10 +7,9 @@ We recommend enterprise customers test the compatibility of new releases with
 their infrastructure on a staging environment before upgrading a production
 deployment.
 
-We support two release channels:
-[mainline](https://github.com/coder/coder/2.10.0) for the edge version of Coder
-and [stable](https://github.com/coder/coder/releases/latest) for those with
-lower tolerance for fault. We field our mainline releases publicly for two weeks
+We support two release channels: [mainline](#mainline-releases) for the bleeding
+edge version of Coder and [stable](#stable-releases) for those with lower
+tolerance for fault. We field our mainline releases publicly for one month
 before promoting them to stable.
 
 ### Mainline releases
@@ -46,11 +45,22 @@ pages.
 
 ## Release schedule
 
-| Release name | Date               | Status           |
+| Release name | Release Date       | Status           |
 | ------------ | ------------------ | ---------------- |
-| 2.7.0        | January 01, 2024   | Not Supported    |
-| 2.8.0        | Februrary 06, 2024 | Security Support |
-| 2.9.0        | March 07, 2024     | Stable           |
-| 2.10.0       | April 03, 2024     | Mainline         |
-| 2.11.0       | May 07, 2024       | Not Released     |
-| 2.12.0       | June 04, 2024      | Not Released     |
+| 2.9.x        | March 07, 2024     | Not Supported    |
+| 2.10.x       | April 03, 2024     | Not Supported    |
+| 2.11.x       | May 07, 2024       | Not Supported    |
+| 2.12.x       | June 04, 2024      | Not Supported    |
+| 2.13.x       | July 02, 2024      | Not Supported    |
+| 2.14.x       | August 06, 2024    | Security Support |
+| 2.15.x       | September 03, 2024 | Stable           |
+| 2.16.x       | October 01, 2024   | Mainline         |
+| 2.17.x       | November 05, 2024  | Not Released     |
+
+> **Tip**: We publish a
+> [`preview`](https://github.com/coder/coder/pkgs/container/coder-preview) image
+> `ghcr.io/coder/coder-preview` on each commit to the `main` branch. This can be
+> used to test under-development features and bug fixes that have not yet been
+> released to [`mainline`](#mainline-releases) or [`stable`](#stable-releases).
+>
+> > **Important**: The `preview` image is not intended for production use.

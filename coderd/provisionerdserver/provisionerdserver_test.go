@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,6 +25,8 @@ import (
 	"golang.org/x/oauth2"
 
 	"cdr.dev/slog/sloggers/slogtest"
+	"github.com/coder/serpent"
+
 	"github.com/coder/coder/v2/buildinfo"
 	"github.com/coder/coder/v2/coderd/audit"
 	"github.com/coder/coder/v2/coderd/database"
@@ -32,6 +35,7 @@ import (
 	"github.com/coder/coder/v2/coderd/database/dbtime"
 	"github.com/coder/coder/v2/coderd/database/pubsub"
 	"github.com/coder/coder/v2/coderd/externalauth"
+	"github.com/coder/coder/v2/coderd/notifications"
 	"github.com/coder/coder/v2/coderd/provisionerdserver"
 	"github.com/coder/coder/v2/coderd/schedule"
 	"github.com/coder/coder/v2/coderd/schedule/cron"
@@ -41,7 +45,6 @@ import (
 	"github.com/coder/coder/v2/provisionersdk"
 	sdkproto "github.com/coder/coder/v2/provisionersdk/proto"
 	"github.com/coder/coder/v2/testutil"
-	"github.com/coder/serpent"
 )
 
 func testTemplateScheduleStore() *atomic.Pointer[schedule.TemplateScheduleStore] {
@@ -102,8 +105,7 @@ func TestHeartbeat(t *testing.T) {
 		select {
 		case <-hbCtx.Done():
 			return hbCtx.Err()
-		default:
-			heartbeatChan <- struct{}{}
+		case heartbeatChan <- struct{}{}:
 			return nil
 		}
 	}
@@ -189,6 +191,9 @@ func TestAcquireJob(t *testing.T) {
 			group1 := dbgen.Group(t, db, database.Group{
 				Name:           "group1",
 				OrganizationID: pd.OrganizationID,
+			})
+			sshKey := dbgen.GitSSHKey(t, db, database.GitSSHKey{
+				UserID: user.ID,
 			})
 			err := db.InsertGroupMember(ctx, database.InsertGroupMemberParams{
 				UserID:  user.ID,
@@ -360,6 +365,9 @@ func TestAcquireJob(t *testing.T) {
 						TemplateName:                  template.Name,
 						TemplateVersion:               version.Name,
 						WorkspaceOwnerSessionToken:    sessionToken,
+						WorkspaceOwnerSshPublicKey:    sshKey.PublicKey,
+						WorkspaceOwnerSshPrivateKey:   sshKey.PrivateKey,
+						WorkspaceBuildId:              build.ID.String(),
 					},
 				},
 			})
@@ -749,6 +757,38 @@ func TestUpdateJob(t *testing.T) {
 			require.Equal(t, templateVariables[0].Value, firstTemplateVariable.DefaultValue)
 			require.Equal(t, templateVariables[1].Value, "")
 		})
+	})
+
+	t.Run("WorkspaceTags", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithTimeout(context.Background(), testutil.WaitLong)
+		defer cancel()
+
+		srv, db, _, pd := setup(t, false, &overrides{})
+		job := setupJob(t, db, pd.ID)
+		versionID := uuid.New()
+		err := db.InsertTemplateVersion(ctx, database.InsertTemplateVersionParams{
+			ID:    versionID,
+			JobID: job,
+		})
+		require.NoError(t, err)
+		_, err = srv.UpdateJob(ctx, &proto.UpdateJobRequest{
+			JobId: job.String(),
+			WorkspaceTags: map[string]string{
+				"bird": "tweety",
+				"cat":  "jinx",
+			},
+		})
+		require.NoError(t, err)
+
+		workspaceTags, err := db.GetTemplateVersionWorkspaceTags(ctx, versionID)
+		require.NoError(t, err)
+		require.Len(t, workspaceTags, 2)
+		require.Equal(t, workspaceTags[0].Key, "bird")
+		require.Equal(t, workspaceTags[0].Value, "tweety")
+		require.Equal(t, workspaceTags[1].Key, "cat")
+		require.Equal(t, workspaceTags[1].Value, "jinx")
 	})
 }
 
@@ -1526,6 +1566,308 @@ func TestInsertWorkspaceResource(t *testing.T) {
 	})
 }
 
+func TestNotifications(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Workspace deletion", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name               string
+			deletionReason     database.BuildReason
+			shouldNotify       bool
+			shouldSelfInitiate bool
+		}{
+			{
+				name:           "initiated by autodelete",
+				deletionReason: database.BuildReasonAutodelete,
+				shouldNotify:   true,
+			},
+			{
+				name:               "initiated by self",
+				deletionReason:     database.BuildReasonInitiator,
+				shouldNotify:       false,
+				shouldSelfInitiate: true,
+			},
+			{
+				name:               "initiated by someone else",
+				deletionReason:     database.BuildReasonInitiator,
+				shouldNotify:       true,
+				shouldSelfInitiate: false,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				ctx := context.Background()
+				notifEnq := &testutil.FakeNotificationsEnqueuer{}
+
+				srv, db, ps, pd := setup(t, false, &overrides{
+					notificationEnqueuer: notifEnq,
+				})
+
+				user := dbgen.User(t, db, database.User{})
+				initiator := user
+				if !tc.shouldSelfInitiate {
+					initiator = dbgen.User(t, db, database.User{})
+				}
+
+				template := dbgen.Template(t, db, database.Template{
+					Name:           "template",
+					Provisioner:    database.ProvisionerTypeEcho,
+					OrganizationID: pd.OrganizationID,
+				})
+				template, err := db.GetTemplateByID(ctx, template.ID)
+				require.NoError(t, err)
+				file := dbgen.File(t, db, database.File{CreatedBy: user.ID})
+				workspace := dbgen.Workspace(t, db, database.Workspace{
+					TemplateID:     template.ID,
+					OwnerID:        user.ID,
+					OrganizationID: pd.OrganizationID,
+				})
+				version := dbgen.TemplateVersion(t, db, database.TemplateVersion{
+					OrganizationID: pd.OrganizationID,
+					TemplateID: uuid.NullUUID{
+						UUID:  template.ID,
+						Valid: true,
+					},
+					JobID: uuid.New(),
+				})
+				build := dbgen.WorkspaceBuild(t, db, database.WorkspaceBuild{
+					WorkspaceID:       workspace.ID,
+					TemplateVersionID: version.ID,
+					InitiatorID:       initiator.ID,
+					Transition:        database.WorkspaceTransitionDelete,
+					Reason:            tc.deletionReason,
+				})
+				job := dbgen.ProvisionerJob(t, db, ps, database.ProvisionerJob{
+					FileID: file.ID,
+					Type:   database.ProvisionerJobTypeWorkspaceBuild,
+					Input: must(json.Marshal(provisionerdserver.WorkspaceProvisionJob{
+						WorkspaceBuildID: build.ID,
+					})),
+					OrganizationID: pd.OrganizationID,
+				})
+				_, err = db.AcquireProvisionerJob(ctx, database.AcquireProvisionerJobParams{
+					OrganizationID: pd.OrganizationID,
+					WorkerID: uuid.NullUUID{
+						UUID:  pd.ID,
+						Valid: true,
+					},
+					Types: []database.ProvisionerType{database.ProvisionerTypeEcho},
+				})
+				require.NoError(t, err)
+
+				_, err = srv.CompleteJob(ctx, &proto.CompletedJob{
+					JobId: job.ID.String(),
+					Type: &proto.CompletedJob_WorkspaceBuild_{
+						WorkspaceBuild: &proto.CompletedJob_WorkspaceBuild{
+							State: []byte{},
+							Resources: []*sdkproto.Resource{{
+								Name: "example",
+								Type: "aws_instance",
+							}},
+						},
+					},
+				})
+				require.NoError(t, err)
+
+				workspace, err = db.GetWorkspaceByID(ctx, workspace.ID)
+				require.NoError(t, err)
+				require.True(t, workspace.Deleted)
+
+				if tc.shouldNotify {
+					// Validate that the notification was sent and contained the expected values.
+					require.Len(t, notifEnq.Sent, 1)
+					require.Equal(t, notifEnq.Sent[0].UserID, user.ID)
+					require.Contains(t, notifEnq.Sent[0].Targets, template.ID)
+					require.Contains(t, notifEnq.Sent[0].Targets, workspace.ID)
+					require.Contains(t, notifEnq.Sent[0].Targets, workspace.OrganizationID)
+					require.Contains(t, notifEnq.Sent[0].Targets, user.ID)
+					if tc.deletionReason == database.BuildReasonInitiator {
+						require.Equal(t, initiator.Username, notifEnq.Sent[0].Labels["initiator"])
+					}
+				} else {
+					require.Len(t, notifEnq.Sent, 0)
+				}
+			})
+		}
+	})
+
+	t.Run("Workspace build failed", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+
+			buildReason  database.BuildReason
+			shouldNotify bool
+		}{
+			{
+				name:         "initiated by owner",
+				buildReason:  database.BuildReasonInitiator,
+				shouldNotify: false,
+			},
+			{
+				name:         "initiated by autostart",
+				buildReason:  database.BuildReasonAutostart,
+				shouldNotify: true,
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				ctx := context.Background()
+				notifEnq := &testutil.FakeNotificationsEnqueuer{}
+
+				//	Otherwise `(*Server).FailJob` fails with:
+				// audit log - get build {"error": "sql: no rows in result set"}
+				ignoreLogErrors := true
+				srv, db, ps, pd := setup(t, ignoreLogErrors, &overrides{
+					notificationEnqueuer: notifEnq,
+				})
+
+				user := dbgen.User(t, db, database.User{})
+				initiator := user
+
+				template := dbgen.Template(t, db, database.Template{
+					Name:           "template",
+					Provisioner:    database.ProvisionerTypeEcho,
+					OrganizationID: pd.OrganizationID,
+				})
+				file := dbgen.File(t, db, database.File{CreatedBy: user.ID})
+				workspace := dbgen.Workspace(t, db, database.Workspace{
+					TemplateID:     template.ID,
+					OwnerID:        user.ID,
+					OrganizationID: pd.OrganizationID,
+				})
+				version := dbgen.TemplateVersion(t, db, database.TemplateVersion{
+					OrganizationID: pd.OrganizationID,
+					TemplateID: uuid.NullUUID{
+						UUID:  template.ID,
+						Valid: true,
+					},
+					JobID: uuid.New(),
+				})
+				build := dbgen.WorkspaceBuild(t, db, database.WorkspaceBuild{
+					WorkspaceID:       workspace.ID,
+					TemplateVersionID: version.ID,
+					InitiatorID:       initiator.ID,
+					Transition:        database.WorkspaceTransitionDelete,
+					Reason:            tc.buildReason,
+				})
+				job := dbgen.ProvisionerJob(t, db, ps, database.ProvisionerJob{
+					FileID: file.ID,
+					Type:   database.ProvisionerJobTypeWorkspaceBuild,
+					Input: must(json.Marshal(provisionerdserver.WorkspaceProvisionJob{
+						WorkspaceBuildID: build.ID,
+					})),
+					OrganizationID: pd.OrganizationID,
+				})
+				_, err := db.AcquireProvisionerJob(ctx, database.AcquireProvisionerJobParams{
+					OrganizationID: pd.OrganizationID,
+					WorkerID: uuid.NullUUID{
+						UUID:  pd.ID,
+						Valid: true,
+					},
+					Types: []database.ProvisionerType{database.ProvisionerTypeEcho},
+				})
+				require.NoError(t, err)
+
+				_, err = srv.FailJob(ctx, &proto.FailedJob{
+					JobId: job.ID.String(),
+					Type: &proto.FailedJob_WorkspaceBuild_{
+						WorkspaceBuild: &proto.FailedJob_WorkspaceBuild{
+							State: []byte{},
+						},
+					},
+				})
+				require.NoError(t, err)
+
+				if tc.shouldNotify {
+					// Validate that the notification was sent and contained the expected values.
+					require.Len(t, notifEnq.Sent, 1)
+					require.Equal(t, notifEnq.Sent[0].UserID, user.ID)
+					require.Contains(t, notifEnq.Sent[0].Targets, template.ID)
+					require.Contains(t, notifEnq.Sent[0].Targets, workspace.ID)
+					require.Contains(t, notifEnq.Sent[0].Targets, workspace.OrganizationID)
+					require.Contains(t, notifEnq.Sent[0].Targets, user.ID)
+					require.Equal(t, string(tc.buildReason), notifEnq.Sent[0].Labels["reason"])
+				} else {
+					require.Len(t, notifEnq.Sent, 0)
+				}
+			})
+		}
+	})
+
+	t.Run("Manual build failed, template admins notified", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+
+		// given
+		notifEnq := &testutil.FakeNotificationsEnqueuer{}
+		srv, db, ps, pd := setup(t, true /* ignoreLogErrors */, &overrides{notificationEnqueuer: notifEnq})
+
+		templateAdmin := dbgen.User(t, db, database.User{RBACRoles: []string{codersdk.RoleTemplateAdmin}})
+		_ /* other template admin, should not receive notification */ = dbgen.User(t, db, database.User{RBACRoles: []string{codersdk.RoleTemplateAdmin}})
+		_ = dbgen.OrganizationMember(t, db, database.OrganizationMember{UserID: templateAdmin.ID, OrganizationID: pd.OrganizationID})
+		user := dbgen.User(t, db, database.User{})
+		_ = dbgen.OrganizationMember(t, db, database.OrganizationMember{UserID: user.ID, OrganizationID: pd.OrganizationID})
+
+		template := dbgen.Template(t, db, database.Template{
+			Name: "template", DisplayName: "William's Template", Provisioner: database.ProvisionerTypeEcho, OrganizationID: pd.OrganizationID,
+		})
+		workspace := dbgen.Workspace(t, db, database.Workspace{
+			TemplateID: template.ID, OwnerID: user.ID, OrganizationID: pd.OrganizationID,
+		})
+		version := dbgen.TemplateVersion(t, db, database.TemplateVersion{
+			OrganizationID: pd.OrganizationID, TemplateID: uuid.NullUUID{UUID: template.ID, Valid: true}, JobID: uuid.New(),
+		})
+		build := dbgen.WorkspaceBuild(t, db, database.WorkspaceBuild{
+			WorkspaceID: workspace.ID, TemplateVersionID: version.ID, InitiatorID: user.ID, Transition: database.WorkspaceTransitionDelete, Reason: database.BuildReasonInitiator,
+		})
+		job := dbgen.ProvisionerJob(t, db, ps, database.ProvisionerJob{
+			FileID:         dbgen.File(t, db, database.File{CreatedBy: user.ID}).ID,
+			Type:           database.ProvisionerJobTypeWorkspaceBuild,
+			Input:          must(json.Marshal(provisionerdserver.WorkspaceProvisionJob{WorkspaceBuildID: build.ID})),
+			OrganizationID: pd.OrganizationID,
+		})
+		_, err := db.AcquireProvisionerJob(ctx, database.AcquireProvisionerJobParams{
+			OrganizationID: pd.OrganizationID,
+			WorkerID:       uuid.NullUUID{UUID: pd.ID, Valid: true},
+			Types:          []database.ProvisionerType{database.ProvisionerTypeEcho},
+		})
+		require.NoError(t, err)
+
+		// when
+		_, err = srv.FailJob(ctx, &proto.FailedJob{
+			JobId: job.ID.String(), Type: &proto.FailedJob_WorkspaceBuild_{WorkspaceBuild: &proto.FailedJob_WorkspaceBuild{State: []byte{}}},
+		})
+		require.NoError(t, err)
+
+		// then
+		require.Len(t, notifEnq.Sent, 1)
+		assert.Equal(t, notifEnq.Sent[0].UserID, templateAdmin.ID)
+		assert.Equal(t, notifEnq.Sent[0].TemplateID, notifications.TemplateWorkspaceManualBuildFailed)
+		assert.Contains(t, notifEnq.Sent[0].Targets, template.ID)
+		assert.Contains(t, notifEnq.Sent[0].Targets, workspace.ID)
+		assert.Contains(t, notifEnq.Sent[0].Targets, workspace.OrganizationID)
+		assert.Contains(t, notifEnq.Sent[0].Targets, user.ID)
+		assert.Equal(t, workspace.Name, notifEnq.Sent[0].Labels["name"])
+		assert.Equal(t, template.Name, notifEnq.Sent[0].Labels["template_name"])
+		assert.Equal(t, template.DisplayName, notifEnq.Sent[0].Labels["template_display_name"])
+		assert.Equal(t, version.Name, notifEnq.Sent[0].Labels["template_version_name"])
+		assert.Equal(t, user.Username, notifEnq.Sent[0].Labels["initiator"])
+		assert.Equal(t, user.Username, notifEnq.Sent[0].Labels["workspace_owner_username"])
+		assert.Equal(t, strconv.Itoa(int(build.BuildNumber)), notifEnq.Sent[0].Labels["workspace_build_number"])
+	})
+}
+
 type overrides struct {
 	ctx                         context.Context
 	deploymentValues            *codersdk.DeploymentValues
@@ -1537,6 +1879,7 @@ type overrides struct {
 	heartbeatFn                 func(ctx context.Context) error
 	heartbeatInterval           time.Duration
 	auditor                     audit.Auditor
+	notificationEnqueuer        notifications.Enqueuer
 }
 
 func setup(t *testing.T, ignoreLogErrors bool, ov *overrides) (proto.DRPCProvisionerDaemonServer, database.Store, pubsub.Pubsub, database.ProvisionerDaemon) {
@@ -1598,6 +1941,12 @@ func setup(t *testing.T, ignoreLogErrors bool, ov *overrides) (proto.DRPCProvisi
 	}
 	auditPtr.Store(&auditor)
 	pollDur = ov.acquireJobLongPollDuration
+	var notifEnq notifications.Enqueuer
+	if ov.notificationEnqueuer != nil {
+		notifEnq = ov.notificationEnqueuer
+	} else {
+		notifEnq = notifications.NewNoopEnqueuer()
+	}
 
 	daemon, err := db.UpsertProvisionerDaemon(ov.ctx, database.UpsertProvisionerDaemonParams{
 		Name:           "test",
@@ -1608,6 +1957,7 @@ func setup(t *testing.T, ignoreLogErrors bool, ov *overrides) (proto.DRPCProvisi
 		Version:        buildinfo.Version(),
 		APIVersion:     proto.CurrentVersion.String(),
 		OrganizationID: defOrg.ID,
+		KeyID:          uuid.MustParse(codersdk.ProvisionerKeyIDBuiltIn),
 	})
 	require.NoError(t, err)
 
@@ -1637,6 +1987,7 @@ func setup(t *testing.T, ignoreLogErrors bool, ov *overrides) (proto.DRPCProvisi
 			HeartbeatInterval:     ov.heartbeatInterval,
 			HeartbeatFn:           ov.heartbeatFn,
 		},
+		notifEnq,
 	)
 	require.NoError(t, err)
 	return srv, db, ps, daemon

@@ -58,6 +58,21 @@ func promptFirstUsername(inv *serpent.Invocation) (string, error) {
 	return username, nil
 }
 
+func promptFirstName(inv *serpent.Invocation) (string, error) {
+	name, err := cliui.Prompt(inv, cliui.PromptOptions{
+		Text:    "(Optional) What " + pretty.Sprint(cliui.DefaultStyles.Field, "name") + " would you like?",
+		Default: "",
+	})
+	if err != nil {
+		if errors.Is(err, cliui.Canceled) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return name, nil
+}
+
 func promptFirstPassword(inv *serpent.Invocation) (string, error) {
 retry:
 	password, err := cliui.Prompt(inv, cliui.PromptOptions{
@@ -130,6 +145,7 @@ func (r *RootCmd) login() *serpent.Command {
 	var (
 		email              string
 		username           string
+		name               string
 		password           string
 		trial              bool
 		useTokenForSession bool
@@ -191,11 +207,12 @@ func (r *RootCmd) login() *serpent.Command {
 
 			_, _ = fmt.Fprintf(inv.Stdout, "Attempting to authenticate with %s URL: '%s'\n", urlSource, serverURL)
 
+			// nolint: nestif
 			if !hasFirstUser {
 				_, _ = fmt.Fprintf(inv.Stdout, Caret+"Your Coder deployment hasn't been set up!\n")
 
 				if username == "" {
-					if !isTTY(inv) {
+					if !isTTYIn(inv) {
 						return xerrors.New("the initial user cannot be created in non-interactive mode. use the API")
 					}
 
@@ -209,6 +226,10 @@ func (r *RootCmd) login() *serpent.Command {
 					}
 
 					username, err = promptFirstUsername(inv)
+					if err != nil {
+						return err
+					}
+					name, err = promptFirstName(inv)
 					if err != nil {
 						return err
 					}
@@ -239,7 +260,7 @@ func (r *RootCmd) login() *serpent.Command {
 
 				if !inv.ParsedFlags().Changed("first-user-trial") && os.Getenv(firstUserTrialEnv) == "" {
 					v, _ := cliui.Prompt(inv, cliui.PromptOptions{
-						Text:      "Start a 30-day trial of Enterprise?",
+						Text:      "Start a trial of Enterprise?",
 						IsConfirm: true,
 						Default:   "yes",
 					})
@@ -249,6 +270,7 @@ func (r *RootCmd) login() *serpent.Command {
 				_, err = client.CreateFirstUser(ctx, codersdk.CreateFirstUserRequest{
 					Email:    email,
 					Username: username,
+					Name:     name,
 					Password: password,
 					Trial:    trial,
 				})
@@ -287,7 +309,8 @@ func (r *RootCmd) login() *serpent.Command {
 				}
 
 				sessionToken, err = cliui.Prompt(inv, cliui.PromptOptions{
-					Text: "Paste your token here:",
+					Text:   "Paste your token here:",
+					Secret: true,
 					Validate: func(token string) error {
 						client.SetSessionToken(token)
 						_, err := client.User(ctx, codersdk.Me)
@@ -353,6 +376,12 @@ func (r *RootCmd) login() *serpent.Command {
 			Value:       serpent.StringOf(&username),
 		},
 		{
+			Flag:        "first-user-full-name",
+			Env:         "CODER_FIRST_USER_FULL_NAME",
+			Description: "Specifies a human-readable name for the first user of the deployment.",
+			Value:       serpent.StringOf(&name),
+		},
+		{
 			Flag:        "first-user-password",
 			Env:         "CODER_FIRST_USER_PASSWORD",
 			Description: "Specifies a password to use if creating the first user for the deployment.",
@@ -387,6 +416,9 @@ func isWSL() (bool, error) {
 
 // openURL opens the provided URL via user's default browser
 func openURL(inv *serpent.Invocation, urlToOpen string) error {
+	if !isTTYOut(inv) {
+		return xerrors.New("skipping browser open in non-interactive mode")
+	}
 	noOpen, err := inv.ParsedFlags().GetBool(varNoOpen)
 	if err != nil {
 		panic(err)

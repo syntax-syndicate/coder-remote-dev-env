@@ -195,6 +195,12 @@ WHERE
 			workspaces.owner_id = @owner_id
 		ELSE true
 	END
+  	-- Filter by organization_id
+  	AND CASE
+		  WHEN @organization_id :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
+			  workspaces.organization_id = @organization_id
+		  ELSE true
+	END
 	-- Filter by build parameter
    	-- @has_param will match any build that includes the parameter.
 	AND CASE WHEN array_length(@has_param :: text[], 1) > 0  THEN
@@ -557,6 +563,8 @@ INNER JOIN
 	provisioner_jobs ON workspace_builds.job_id = provisioner_jobs.id
 INNER JOIN
 	templates ON workspaces.template_id = templates.id
+INNER JOIN
+	users ON workspaces.owner_id = users.id
 WHERE
 	workspace_builds.build_number = (
 		SELECT
@@ -608,6 +616,12 @@ WHERE
 		(
 			templates.time_til_dormant_autodelete > 0 AND
 			workspaces.dormant_at IS NOT NULL
+		) OR
+
+		-- If the user account is suspended, and the workspace is running.
+		(
+			users.status = 'suspended'::user_status AND
+			workspace_builds.transition = 'start'::workspace_transition
 		)
 	) AND workspaces.deleted = 'false';
 
@@ -638,7 +652,7 @@ WHERE
 RETURNING
     workspaces.*;
 
--- name: UpdateWorkspacesDormantDeletingAtByTemplateID :exec
+-- name: UpdateWorkspacesDormantDeletingAtByTemplateID :many
 UPDATE workspaces
 SET
     deleting_at = CASE
@@ -650,7 +664,8 @@ SET
 WHERE
     template_id = @template_id
 AND
-    dormant_at IS NOT NULL;
+    dormant_at IS NOT NULL
+RETURNING *;
 
 -- name: UpdateTemplateWorkspacesLastUsedAt :exec
 UPDATE workspaces

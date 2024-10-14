@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/coreos/go-systemd/daemon"
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
@@ -55,6 +56,16 @@ import (
 
 	"cdr.dev/slog"
 	"cdr.dev/slog/sloggers/sloghuman"
+	"github.com/coder/pretty"
+	"github.com/coder/quartz"
+	"github.com/coder/retry"
+	"github.com/coder/serpent"
+	"github.com/coder/wgtunnel/tunnelsdk"
+
+	"github.com/coder/coder/v2/coderd/entitlements"
+	"github.com/coder/coder/v2/coderd/notifications/reports"
+	"github.com/coder/coder/v2/coderd/runtimeconfig"
+
 	"github.com/coder/coder/v2/buildinfo"
 	"github.com/coder/coder/v2/cli/clilog"
 	"github.com/coder/coder/v2/cli/cliui"
@@ -62,9 +73,9 @@ import (
 	"github.com/coder/coder/v2/cli/config"
 	"github.com/coder/coder/v2/coderd"
 	"github.com/coder/coder/v2/coderd/autobuild"
-	"github.com/coder/coder/v2/coderd/batchstats"
 	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/database/awsiamrds"
+	"github.com/coder/coder/v2/coderd/database/dbauthz"
 	"github.com/coder/coder/v2/coderd/database/dbmem"
 	"github.com/coder/coder/v2/coderd/database/dbmetrics"
 	"github.com/coder/coder/v2/coderd/database/dbpurge"
@@ -74,6 +85,7 @@ import (
 	"github.com/coder/coder/v2/coderd/externalauth"
 	"github.com/coder/coder/v2/coderd/gitsshkey"
 	"github.com/coder/coder/v2/coderd/httpmw"
+	"github.com/coder/coder/v2/coderd/notifications"
 	"github.com/coder/coder/v2/coderd/oauthpki"
 	"github.com/coder/coder/v2/coderd/prometheusmetrics"
 	"github.com/coder/coder/v2/coderd/prometheusmetrics/insights"
@@ -87,7 +99,7 @@ import (
 	stringutil "github.com/coder/coder/v2/coderd/util/strings"
 	"github.com/coder/coder/v2/coderd/workspaceapps"
 	"github.com/coder/coder/v2/coderd/workspaceapps/appurl"
-	"github.com/coder/coder/v2/coderd/workspaceusage"
+	"github.com/coder/coder/v2/coderd/workspacestats"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/codersdk/drpc"
 	"github.com/coder/coder/v2/cryptorand"
@@ -98,18 +110,20 @@ import (
 	"github.com/coder/coder/v2/provisionersdk"
 	sdkproto "github.com/coder/coder/v2/provisionersdk/proto"
 	"github.com/coder/coder/v2/tailnet"
-	"github.com/coder/pretty"
-	"github.com/coder/retry"
-	"github.com/coder/serpent"
-	"github.com/coder/wgtunnel/tunnelsdk"
 )
 
-func createOIDCConfig(ctx context.Context, vals *codersdk.DeploymentValues) (*coderd.OIDCConfig, error) {
+func createOIDCConfig(ctx context.Context, logger slog.Logger, vals *codersdk.DeploymentValues) (*coderd.OIDCConfig, error) {
 	if vals.OIDC.ClientID == "" {
 		return nil, xerrors.Errorf("OIDC client ID must be set!")
 	}
 	if vals.OIDC.IssuerURL == "" {
 		return nil, xerrors.Errorf("OIDC issuer URL must be set!")
+	}
+
+	// Skipping issuer checks is not recommended.
+	if vals.OIDC.SkipIssuerChecks {
+		logger.Warn(ctx, "issuer checks with OIDC is disabled. This is not recommended as it can compromise the security of the authentication")
+		ctx = oidc.InsecureIssuerURLContext(ctx, vals.OIDC.IssuerURL.String())
 	}
 
 	oidcProvider, err := oidc.NewProvider(
@@ -165,21 +179,17 @@ func createOIDCConfig(ctx context.Context, vals *codersdk.DeploymentValues) (*co
 		Provider:     oidcProvider,
 		Verifier: oidcProvider.Verifier(&oidc.Config{
 			ClientID: vals.OIDC.ClientID.String(),
+			// Enabling this skips checking the "iss" claim in the token
+			// matches the issuer URL. This is not recommended.
+			SkipIssuerCheck: vals.OIDC.SkipIssuerChecks.Value(),
 		}),
 		EmailDomain:         vals.OIDC.EmailDomain,
 		AllowSignups:        vals.OIDC.AllowSignups.Value(),
 		UsernameField:       vals.OIDC.UsernameField.String(),
+		NameField:           vals.OIDC.NameField.String(),
 		EmailField:          vals.OIDC.EmailField.String(),
 		AuthURLParams:       vals.OIDC.AuthURLParams.Value,
 		IgnoreUserInfo:      vals.OIDC.IgnoreUserInfo.Value(),
-		GroupField:          vals.OIDC.GroupField.String(),
-		GroupFilter:         vals.OIDC.GroupRegexFilter.Value(),
-		GroupAllowList:      groupAllowList,
-		CreateMissingGroups: vals.OIDC.GroupAutoCreate.Value(),
-		GroupMapping:        vals.OIDC.GroupMapping.Value,
-		UserRoleField:       vals.OIDC.UserRoleField.String(),
-		UserRoleMapping:     vals.OIDC.UserRoleMapping.Value,
-		UserRolesDefault:    vals.OIDC.UserRolesDefault.GetSlice(),
 		SignInText:          vals.OIDC.SignInText.String(),
 		SignupsDisabledText: vals.OIDC.SignupsDisabledText.String(),
 		IconURL:             vals.OIDC.IconURL.String(),
@@ -231,7 +241,8 @@ func enablePrometheus(
 	afterCtx(ctx, closeInsightsMetricsCollector)
 
 	if vals.Prometheus.CollectAgentStats {
-		closeAgentStatsFunc, err := prometheusmetrics.AgentStats(ctx, logger, options.PrometheusRegistry, options.Database, time.Now(), 0, options.DeploymentValues.Prometheus.AggregateAgentStatsBy.Value())
+		experiments := coderd.ReadExperiments(options.Logger, options.DeploymentValues.Experiments.Value())
+		closeAgentStatsFunc, err := prometheusmetrics.AgentStats(ctx, logger, options.PrometheusRegistry, options.Database, time.Now(), 0, options.DeploymentValues.Prometheus.AggregateAgentStatsBy.Value(), experiments.Enabled(codersdk.ExperimentWorkspaceUsage))
 		if err != nil {
 			return nil, xerrors.Errorf("register agent stats prometheus metric: %w", err)
 		}
@@ -474,8 +485,20 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				)
 			}
 
-			// A newline is added before for visibility in terminal output.
-			cliui.Infof(inv.Stdout, "\nView the Web UI: %s", vals.AccessURL.String())
+			accessURL := vals.AccessURL.String()
+			cliui.Infof(inv.Stdout, lipgloss.NewStyle().
+				Border(lipgloss.DoubleBorder()).
+				Align(lipgloss.Center).
+				Padding(0, 3).
+				BorderForeground(lipgloss.Color("12")).
+				Render(fmt.Sprintf("View the Web UI:\n%s",
+					pretty.Sprint(cliui.DefaultStyles.Hyperlink, accessURL))))
+			if buildinfo.HasSite() {
+				err = openURL(inv, accessURL)
+				if err == nil {
+					cliui.Infof(inv.Stdout, "Opening local browser... You can disable this by passing --no-open.\n")
+				}
+			}
 
 			// Used for zero-trust instance identity with Google Cloud.
 			googleTokenValidator, err := idtoken.NewValidator(ctx, option.WithoutAuthentication())
@@ -592,6 +615,8 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 					SSHConfigOptions: configSSHOptions,
 				},
 				AllowWorkspaceRenames: vals.AllowWorkspaceRenames.Value(),
+				Entitlements:          entitlements.New(),
+				NotificationsEnqueuer: notifications.NewNoopEnqueuer(), // Changed further down if notifications enabled.
 			}
 			if httpServers.TLSConfig != nil {
 				options.TLSCertificates = httpServers.TLSConfig.Certificates
@@ -618,7 +643,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 								"new version of coder available",
 								slog.F("new_version", r.Version),
 								slog.F("url", r.URL),
-								slog.F("upgrade_instructions", "https://coder.com/docs/coder-oss/latest/admin/upgrade"),
+								slog.F("upgrade_instructions", fmt.Sprintf("%s/admin/upgrade", vals.DocsURL.String())),
 							)
 						}
 					},
@@ -653,7 +678,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				// Missing:
 				//	- Userinfo
 				//	- Verify
-				oc, err := createOIDCConfig(ctx, vals)
+				oc, err := createOIDCConfig(ctx, options.Logger, vals)
 				if err != nil {
 					return xerrors.Errorf("create oidc config: %w", err)
 				}
@@ -774,17 +799,25 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 					}
 				}
 
-				keyBytes, err := hex.DecodeString(oauthSigningKeyStr)
+				oauthKeyBytes, err := hex.DecodeString(oauthSigningKeyStr)
 				if err != nil {
 					return xerrors.Errorf("decode oauth signing key from database: %w", err)
 				}
-				if len(keyBytes) != len(options.OAuthSigningKey) {
-					return xerrors.Errorf("oauth signing key in database is not the correct length, expect %d got %d", len(options.OAuthSigningKey), len(keyBytes))
+				if len(oauthKeyBytes) != len(options.OAuthSigningKey) {
+					return xerrors.Errorf("oauth signing key in database is not the correct length, expect %d got %d", len(options.OAuthSigningKey), len(oauthKeyBytes))
 				}
-				copy(options.OAuthSigningKey[:], keyBytes)
+				copy(options.OAuthSigningKey[:], oauthKeyBytes)
 				if options.OAuthSigningKey == [32]byte{} {
 					return xerrors.Errorf("oauth signing key in database is empty")
 				}
+
+				// Read the coordinator resume token signing key from the
+				// database.
+				resumeTokenKey, err := tailnet.ResumeTokenSigningKeyFromDatabase(ctx, tx)
+				if err != nil {
+					return xerrors.Errorf("get coordinator resume token key from database: %w", err)
+				}
+				options.CoordinatorResumeTokenProvider = tailnet.NewResumeTokenKeyProvider(resumeTokenKey, quartz.NewReal(), tailnet.DefaultResumeTokenExpiry)
 
 				return nil
 			}, nil)
@@ -792,35 +825,24 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				return err
 			}
 
+			options.RuntimeConfig = runtimeconfig.NewManager()
+
 			// This should be output before the logs start streaming.
 			cliui.Infof(inv.Stdout, "\n==> Logs will stream in below (press ctrl+c to gracefully exit):")
 
 			if vals.Telemetry.Enable {
-				gitAuth := make([]telemetry.GitAuth, 0)
-				// TODO:
-				var gitAuthConfigs []codersdk.ExternalAuthConfig
-				for _, cfg := range gitAuthConfigs {
-					gitAuth = append(gitAuth, telemetry.GitAuth{
-						Type: cfg.Type,
-					})
+				vals, err := vals.WithoutSecrets()
+				if err != nil {
+					return xerrors.Errorf("remove secrets from deployment values: %w", err)
 				}
-
 				options.Telemetry, err = telemetry.New(telemetry.Options{
-					BuiltinPostgres:    builtinPostgres,
-					DeploymentID:       deploymentID,
-					Database:           options.Database,
-					Logger:             logger.Named("telemetry"),
-					URL:                vals.Telemetry.URL.Value(),
-					Wildcard:           vals.WildcardAccessURL.String() != "",
-					DERPServerRelayURL: vals.DERP.Server.RelayURL.String(),
-					GitAuth:            gitAuth,
-					GitHubOAuth:        vals.OAuth2.Github.ClientID != "",
-					OIDCAuth:           vals.OIDC.ClientID != "",
-					OIDCIssuerURL:      vals.OIDC.IssuerURL.String(),
-					Prometheus:         vals.Prometheus.Enable.Value(),
-					STUN:               len(vals.DERP.Server.STUNAddresses) != 0,
-					Tunnel:             tunnel != nil,
-					Experiments:        vals.Experiments.Value(),
+					BuiltinPostgres:  builtinPostgres,
+					DeploymentID:     deploymentID,
+					Database:         options.Database,
+					Logger:           logger.Named("telemetry"),
+					URL:              vals.Telemetry.URL.Value(),
+					Tunnel:           tunnel != nil,
+					DeploymentConfig: vals,
 					ParseLicenseJWT: func(lic *telemetry.License) error {
 						// This will be nil when running in AGPL-only mode.
 						if options.ParseLicenseClaims == nil {
@@ -843,7 +865,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				}
 				defer options.Telemetry.Close()
 			} else {
-				logger.Warn(ctx, `telemetry disabled, unable to notify of security issues. Read more: https://coder.com/docs/v2/latest/admin/telemetry`)
+				logger.Warn(ctx, fmt.Sprintf(`telemetry disabled, unable to notify of security issues. Read more: %s/admin/telemetry`, vals.DocsURL.String()))
 			}
 
 			// This prevents the pprof import from being accidentally deleted.
@@ -869,9 +891,9 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				options.SwaggerEndpoint = vals.Swagger.Enable.Value()
 			}
 
-			batcher, closeBatcher, err := batchstats.New(ctx,
-				batchstats.WithLogger(options.Logger.Named("batchstats")),
-				batchstats.WithStore(options.Database),
+			batcher, closeBatcher, err := workspacestats.NewBatcher(ctx,
+				workspacestats.BatcherWithLogger(options.Logger.Named("batchstats")),
+				workspacestats.BatcherWithStore(options.Database),
 			)
 			if err != nil {
 				return xerrors.Errorf("failed to create agent stats batcher: %w", err)
@@ -926,6 +948,33 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				return xerrors.Errorf("write config url: %w", err)
 			}
 
+			// Manage notifications.
+			cfg := options.DeploymentValues.Notifications
+			metrics := notifications.NewMetrics(options.PrometheusRegistry)
+			helpers := templateHelpers(options)
+
+			// The enqueuer is responsible for enqueueing notifications to the given store.
+			enqueuer, err := notifications.NewStoreEnqueuer(cfg, options.Database, helpers, logger.Named("notifications.enqueuer"), quartz.NewReal())
+			if err != nil {
+				return xerrors.Errorf("failed to instantiate notification store enqueuer: %w", err)
+			}
+			options.NotificationsEnqueuer = enqueuer
+
+			// The notification manager is responsible for:
+			//   - creating notifiers and managing their lifecycles (notifiers are responsible for dequeueing/sending notifications)
+			//   - keeping the store updated with status updates
+			notificationsManager, err := notifications.NewManager(cfg, options.Database, helpers, metrics, logger.Named("notifications.manager"))
+			if err != nil {
+				return xerrors.Errorf("failed to instantiate notification manager: %w", err)
+			}
+
+			// nolint:gocritic // TODO: create own role.
+			notificationsManager.Run(dbauthz.AsSystemRestricted(ctx))
+
+			// Run report generator to distribute periodic reports.
+			notificationReportGenerator := reports.NewReportGenerator(ctx, logger.Named("notifications.report_generator"), options.Database, options.NotificationsEnqueuer, quartz.NewReal())
+			defer notificationReportGenerator.Close()
+
 			// Since errCh only has one buffered slot, all routines
 			// sending on it must be wrapped in a select/default to
 			// avoid leaving dangling goroutines waiting for the
@@ -944,6 +993,13 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			var provisionerdWaitGroup sync.WaitGroup
 			defer provisionerdWaitGroup.Wait()
 			provisionerdMetrics := provisionerd.NewMetrics(options.PrometheusRegistry)
+
+			// Built in provisioner daemons will support the same types.
+			// By default, this is the slice {"terraform"}
+			provisionerTypes := make([]codersdk.ProvisionerType, 0)
+			for _, pt := range vals.Provisioner.DaemonTypes {
+				provisionerTypes = append(provisionerTypes, codersdk.ProvisionerType(pt))
+			}
 			for i := int64(0); i < vals.Provisioner.Daemons.Value(); i++ {
 				suffix := fmt.Sprintf("%d", i)
 				// The suffix is added to the hostname, so we may need to trim to fit into
@@ -952,7 +1008,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				name := fmt.Sprintf("%s-%s", hostname, suffix)
 				daemonCacheDir := filepath.Join(cacheDir, fmt.Sprintf("provisioner-%d", i))
 				daemon, err := newProvisionerDaemon(
-					ctx, coderAPI, provisionerdMetrics, logger, vals, daemonCacheDir, errCh, &provisionerdWaitGroup, name,
+					ctx, coderAPI, provisionerdMetrics, logger, vals, daemonCacheDir, errCh, &provisionerdWaitGroup, name, provisionerTypes,
 				)
 				if err != nil {
 					return xerrors.Errorf("create provisioner daemon: %w", err)
@@ -965,12 +1021,12 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			defer shutdownConns()
 
 			// Ensures that old database entries are cleaned up over time!
-			purger := dbpurge.New(ctx, logger, options.Database)
+			purger := dbpurge.New(ctx, logger.Named("dbpurge"), options.Database, quartz.NewReal())
 			defer purger.Close()
 
 			// Updates workspace usage
-			tracker := workspaceusage.New(options.Database,
-				workspaceusage.WithLogger(logger.Named("workspace_usage_tracker")),
+			tracker := workspacestats.NewTracker(options.Database,
+				workspacestats.TrackerWithLogger(logger.Named("workspace_usage_tracker")),
 			)
 			options.WorkspaceUsageTracker = tracker
 			defer tracker.Close()
@@ -1037,7 +1093,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			autobuildTicker := time.NewTicker(vals.AutobuildPollInterval.Value())
 			defer autobuildTicker.Stop()
 			autobuildExecutor := autobuild.NewExecutor(
-				ctx, options.Database, options.Pubsub, coderAPI.TemplateScheduleStore, &coderAPI.Auditor, coderAPI.AccessControlStore, logger, autobuildTicker.C)
+				ctx, options.Database, options.Pubsub, coderAPI.TemplateScheduleStore, &coderAPI.Auditor, coderAPI.AccessControlStore, logger, autobuildTicker.C, options.NotificationsEnqueuer)
 			autobuildExecutor.Run()
 
 			hangDetectorTicker := time.NewTicker(vals.JobHangDetectorInterval.Value())
@@ -1055,10 +1111,10 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			case <-stopCtx.Done():
 				exitErr = stopCtx.Err()
 				waitForProvisionerJobs = true
-				_, _ = io.WriteString(inv.Stdout, cliui.Bold("Stop caught, waiting for provisioner jobs to complete and gracefully exiting. Use ctrl+\\ to force quit"))
+				_, _ = io.WriteString(inv.Stdout, cliui.Bold("Stop caught, waiting for provisioner jobs to complete and gracefully exiting. Use ctrl+\\ to force quit\n"))
 			case <-interruptCtx.Done():
 				exitErr = interruptCtx.Err()
-				_, _ = io.WriteString(inv.Stdout, cliui.Bold("Interrupt caught, gracefully exiting. Use ctrl+\\ to force quit"))
+				_, _ = io.WriteString(inv.Stdout, cliui.Bold("Interrupt caught, gracefully exiting. Use ctrl+\\ to force quit\n"))
 			case <-tunnelDone:
 				exitErr = xerrors.New("dev tunnel closed unexpectedly")
 			case <-pubsubWatchdogTimeout:
@@ -1093,6 +1149,19 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			}
 			// Cancel any remaining in-flight requests.
 			shutdownConns()
+
+			// Stop the notification manager, which will cause any buffered updates to the store to be flushed.
+			// If the Stop() call times out, messages that were sent but not reflected as such in the store will have
+			// their leases expire after a period of time and will be re-queued for sending.
+			// See CODER_NOTIFICATIONS_LEASE_PERIOD.
+			cliui.Info(inv.Stdout, "Shutting down notifications manager..."+"\n")
+			err = shutdownWithTimeout(notificationsManager.Stop, 5*time.Second)
+			if err != nil {
+				cliui.Warnf(inv.Stderr, "Notifications manager shutdown took longer than 5s, "+
+					"this may result in duplicate notifications being sent: %s\n", err)
+			} else {
+				cliui.Info(inv.Stdout, "Gracefully shut down notifications manager\n")
+			}
 
 			// Shut down provisioners before waiting for WebSockets
 			// connections to close.
@@ -1233,6 +1302,16 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 	return serverCmd
 }
 
+// templateHelpers builds a set of functions which can be called in templates.
+// We build them here to avoid an import cycle by using coderd.Options in notifications.Manager.
+// We can later use this to inject whitelabel fields when app name / logo URL are overridden.
+func templateHelpers(options *coderd.Options) map[string]any {
+	return map[string]any{
+		"base_url":     func() string { return options.AccessURL.String() },
+		"current_year": func() string { return strconv.Itoa(time.Now().Year()) },
+	}
+}
+
 // printDeprecatedOptions loops through all command options, and prints
 // a warning for usage of deprecated options.
 func PrintDeprecatedOptions() serpent.MiddlewareFunc {
@@ -1340,6 +1419,7 @@ func newProvisionerDaemon(
 	errCh chan error,
 	wg *sync.WaitGroup,
 	name string,
+	provisionerTypes []codersdk.ProvisionerType,
 ) (srv *provisionerd.Server, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -1359,81 +1439,91 @@ func newProvisionerDaemon(
 		return nil, xerrors.Errorf("mkdir work dir: %w", err)
 	}
 
+	// Omit any duplicates
+	provisionerTypes = slice.Unique(provisionerTypes)
+	provisionerLogger := logger.Named(fmt.Sprintf("provisionerd-%s", name))
+
+	// Populate the connector with the supported types.
 	connector := provisionerd.LocalProvisioners{}
-	if cfg.Provisioner.DaemonsEcho {
-		echoClient, echoServer := drpc.MemTransportPipe()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-ctx.Done()
-			_ = echoClient.Close()
-			_ = echoServer.Close()
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer cancel()
+	for _, provisionerType := range provisionerTypes {
+		switch provisionerType {
+		case codersdk.ProvisionerTypeEcho:
+			echoClient, echoServer := drpc.MemTransportPipe()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-ctx.Done()
+				_ = echoClient.Close()
+				_ = echoServer.Close()
+			}()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer cancel()
 
-			err := echo.Serve(ctx, &provisionersdk.ServeOptions{
-				Listener:      echoServer,
-				WorkDirectory: workDir,
-				Logger:        logger.Named("echo"),
-			})
-			if err != nil {
-				select {
-				case errCh <- err:
-				default:
-				}
-			}
-		}()
-		connector[string(database.ProvisionerTypeEcho)] = sdkproto.NewDRPCProvisionerClient(echoClient)
-	} else {
-		tfDir := filepath.Join(cacheDir, "tf")
-		err = os.MkdirAll(tfDir, 0o700)
-		if err != nil {
-			return nil, xerrors.Errorf("mkdir terraform dir: %w", err)
-		}
-
-		tracer := coderAPI.TracerProvider.Tracer(tracing.TracerName)
-		terraformClient, terraformServer := drpc.MemTransportPipe()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-ctx.Done()
-			_ = terraformClient.Close()
-			_ = terraformServer.Close()
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer cancel()
-
-			err := terraform.Serve(ctx, &terraform.ServeOptions{
-				ServeOptions: &provisionersdk.ServeOptions{
-					Listener:      terraformServer,
-					Logger:        logger.Named("terraform"),
+				err := echo.Serve(ctx, &provisionersdk.ServeOptions{
+					Listener:      echoServer,
 					WorkDirectory: workDir,
-				},
-				CachePath: tfDir,
-				Tracer:    tracer,
-			})
-			if err != nil && !xerrors.Is(err, context.Canceled) {
-				select {
-				case errCh <- err:
-				default:
+					Logger:        logger.Named("echo"),
+				})
+				if err != nil {
+					select {
+					case errCh <- err:
+					default:
+					}
 				}
+			}()
+			connector[string(database.ProvisionerTypeEcho)] = sdkproto.NewDRPCProvisionerClient(echoClient)
+		case codersdk.ProvisionerTypeTerraform:
+			tfDir := filepath.Join(cacheDir, "tf")
+			err = os.MkdirAll(tfDir, 0o700)
+			if err != nil {
+				return nil, xerrors.Errorf("mkdir terraform dir: %w", err)
 			}
-		}()
 
-		connector[string(database.ProvisionerTypeTerraform)] = sdkproto.NewDRPCProvisionerClient(terraformClient)
+			tracer := coderAPI.TracerProvider.Tracer(tracing.TracerName)
+			terraformClient, terraformServer := drpc.MemTransportPipe()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-ctx.Done()
+				_ = terraformClient.Close()
+				_ = terraformServer.Close()
+			}()
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer cancel()
+
+				err := terraform.Serve(ctx, &terraform.ServeOptions{
+					ServeOptions: &provisionersdk.ServeOptions{
+						Listener:      terraformServer,
+						Logger:        provisionerLogger,
+						WorkDirectory: workDir,
+					},
+					CachePath: tfDir,
+					Tracer:    tracer,
+				})
+				if err != nil && !xerrors.Is(err, context.Canceled) {
+					select {
+					case errCh <- err:
+					default:
+					}
+				}
+			}()
+
+			connector[string(database.ProvisionerTypeTerraform)] = sdkproto.NewDRPCProvisionerClient(terraformClient)
+		default:
+			return nil, xerrors.Errorf("unknown provisioner type %q", provisionerType)
+		}
 	}
 
 	return provisionerd.New(func(dialCtx context.Context) (proto.DRPCProvisionerDaemonClient, error) {
 		// This debounces calls to listen every second. Read the comment
 		// in provisionerdserver.go to learn more!
-		return coderAPI.CreateInMemoryProvisionerDaemon(dialCtx, name)
+		return coderAPI.CreateInMemoryProvisionerDaemon(dialCtx, name, provisionerTypes)
 	}, &provisionerd.Options{
-		Logger:              logger.Named(fmt.Sprintf("provisionerd-%s", name)),
+		Logger:              provisionerLogger,
 		UpdateInterval:      time.Second,
 		ForceCancelInterval: cfg.Provisioner.ForceCancelInterval.Value(),
 		Connector:           connector,
@@ -1507,6 +1597,19 @@ func generateSelfSignedCertificate() (*tls.Certificate, error) {
 	return &cert, nil
 }
 
+// defaultCipherSuites is a list of safe cipher suites that we default to. This
+// is different from Golang's list of defaults, which unfortunately includes
+// `TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA`.
+var defaultCipherSuites = func() []uint16 {
+	ret := []uint16{}
+
+	for _, suite := range tls.CipherSuites() {
+		ret = append(ret, suite.ID)
+	}
+
+	return ret
+}()
+
 // configureServerTLS returns the TLS config used for the Coderd server
 // connections to clients. A logger is passed in to allow printing warning
 // messages that do not block startup.
@@ -1537,6 +1640,8 @@ func configureServerTLS(ctx context.Context, logger slog.Logger, tlsMinVersion, 
 			return nil, err
 		}
 		tlsConfig.CipherSuites = cipherIDs
+	} else {
+		tlsConfig.CipherSuites = defaultCipherSuites
 	}
 
 	switch tlsClientAuth {

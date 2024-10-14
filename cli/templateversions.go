@@ -19,8 +19,8 @@ func (r *RootCmd) templateVersions() *serpent.Command {
 		Use:     "versions",
 		Short:   "Manage different versions of the specified template",
 		Aliases: []string{"version"},
-		Long: formatExamples(
-			example{
+		Long: FormatExamples(
+			Example{
 				Description: "List versions of a specific template",
 				Command:     "coder templates versions list my-template",
 			},
@@ -40,17 +40,18 @@ func (r *RootCmd) templateVersions() *serpent.Command {
 
 func (r *RootCmd) templateVersionsList() *serpent.Command {
 	defaultColumns := []string{
-		"Name",
-		"Created At",
-		"Created By",
-		"Status",
-		"Active",
+		"name",
+		"created at",
+		"created by",
+		"status",
+		"active",
 	}
 	formatter := cliui.NewOutputFormatter(
 		cliui.TableFormat([]templateVersionRow{}, defaultColumns),
 		cliui.JSONFormat(),
 	)
 	client := new(codersdk.Client)
+	orgContext := NewOrganizationContext()
 
 	var includeArchived serpent.Bool
 
@@ -69,10 +70,10 @@ func (r *RootCmd) templateVersionsList() *serpent.Command {
 						for _, opt := range i.Command.Options {
 							if opt.Flag == "column" {
 								if opt.ValueSource == serpent.ValueSourceDefault {
-									v, ok := opt.Value.(*serpent.StringArray)
+									v, ok := opt.Value.(*serpent.EnumArray)
 									if ok {
 										// Add the extra new default column.
-										*v = append(*v, "Archived")
+										_ = v.Append("Archived")
 									}
 								}
 								break
@@ -93,7 +94,7 @@ func (r *RootCmd) templateVersionsList() *serpent.Command {
 			},
 		},
 		Handler: func(inv *serpent.Invocation) error {
-			organization, err := CurrentOrganization(r, inv, client)
+			organization, err := orgContext.Selected(inv, client)
 			if err != nil {
 				return xerrors.Errorf("get current organization: %w", err)
 			}
@@ -122,6 +123,7 @@ func (r *RootCmd) templateVersionsList() *serpent.Command {
 		},
 	}
 
+	orgContext.AttachOptions(cmd)
 	formatter.AttachOptions(&cmd.Options)
 	return cmd
 }

@@ -142,6 +142,7 @@ provider "aws" {
 
 data "coder_workspace" "me" {
 }
+data "coder_workspace_owner" "me" {}
 
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -164,8 +165,11 @@ resource "coder_agent" "dev" {
   startup_script = <<-EOT
     set -e
 
-    # install and start code-server
-    curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server --version 4.11.0
+    # Install the latest code-server.
+    # Append "--version x.x.x" to install a specific version of code-server.
+    curl -fsSL https://code-server.dev/install.sh | sh -s -- --method=standalone --prefix=/tmp/code-server
+
+    # Start code-server in the background.
     /tmp/code-server/bin/code-server --auth none --port 13337 >/tmp/code-server.log 2>&1 &
   EOT
 
@@ -249,7 +253,7 @@ resource "aws_instance" "dev" {
 
   user_data = local.user_data
   tags = {
-    Name = "coder-${data.coder_workspace.me.owner}-${data.coder_workspace.me.name}"
+    Name = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}"
     # Required if you are using our example policy, see template README
     Coder_Provisioned = "true"
   }

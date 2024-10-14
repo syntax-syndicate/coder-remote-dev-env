@@ -24,9 +24,11 @@ import (
 	"github.com/coder/coder/v2/coderd/database/dbtime"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
+	"github.com/coder/coder/v2/coderd/telemetry"
 	"github.com/coder/coder/v2/coderd/util/ptr"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/tailnet"
+	tailnetproto "github.com/coder/coder/v2/tailnet/proto"
 )
 
 // @Summary Workspace agent RPC API
@@ -114,7 +116,19 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 	}
 	defer mux.Close()
 
-	logger.Debug(ctx, "accepting agent RPC connection", slog.F("agent", workspaceAgent))
+	logger.Debug(ctx, "accepting agent RPC connection",
+		slog.F("agent_id", workspaceAgent.ID),
+		slog.F("agent_created_at", workspaceAgent.CreatedAt),
+		slog.F("agent_updated_at", workspaceAgent.UpdatedAt),
+		slog.F("agent_name", workspaceAgent.Name),
+		slog.F("agent_first_connected_at", workspaceAgent.FirstConnectedAt.Time),
+		slog.F("agent_last_connected_at", workspaceAgent.LastConnectedAt.Time),
+		slog.F("agent_disconnected_at", workspaceAgent.DisconnectedAt.Time),
+		slog.F("agent_version", workspaceAgent.Version),
+		slog.F("agent_last_connected_replica_id", workspaceAgent.LastConnectedReplicaID),
+		slog.F("agent_connection_timeout_seconds", workspaceAgent.ConnectionTimeoutSeconds),
+		slog.F("agent_api_version", workspaceAgent.APIVersion),
+		slog.F("agent_resource_id", workspaceAgent.ResourceID))
 
 	closeCtx, closeCtxCancel := context.WithCancel(ctx)
 	defer closeCtxCancel()
@@ -130,11 +144,11 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 		Pubsub:                            api.Pubsub,
 		DerpMapFn:                         api.DERPMap,
 		TailnetCoordinator:                &api.TailnetCoordinator,
-		TemplateScheduleStore:             api.TemplateScheduleStore,
 		AppearanceFetcher:                 &api.AppearanceFetcher,
-		StatsBatcher:                      api.statsBatcher,
+		StatsReporter:                     api.statsReporter,
 		PublishWorkspaceUpdateFn:          api.publishWorkspaceUpdate,
 		PublishWorkspaceAgentLogsUpdateFn: api.publishWorkspaceAgentLogsUpdate,
+		NetworkTelemetryHandler:           api.NetworkTelemetryBatcher.Handler,
 
 		AccessURL:                 api.AccessURL,
 		AppHostname:               api.AppHostname,
@@ -143,6 +157,7 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 		DerpForceWebSockets:       api.DeploymentValues.DERP.Config.ForceWebSockets.Value(),
 		DerpMapUpdateFrequency:    api.Options.DERPMapUpdateFrequency,
 		ExternalAuthConfigs:       api.ExternalAuthConfigs,
+		Experiments:               api.Experiments,
 
 		// Optional:
 		WorkspaceID:          build.WorkspaceID, // saves the extra lookup later
@@ -164,29 +179,27 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (api *API) startAgentWebsocketMonitor(ctx context.Context,
-	workspaceAgent database.WorkspaceAgent, workspaceBuild database.WorkspaceBuild,
-	conn *websocket.Conn,
-) *agentConnectionMonitor {
-	monitor := &agentConnectionMonitor{
-		apiCtx:            api.ctx,
-		workspaceAgent:    workspaceAgent,
-		workspaceBuild:    workspaceBuild,
-		conn:              conn,
-		pingPeriod:        api.AgentConnectionUpdateFrequency,
-		db:                api.Database,
-		replicaID:         api.ID,
-		updater:           api,
-		disconnectTimeout: api.AgentInactiveDisconnectTimeout,
-		logger: api.Logger.With(
-			slog.F("workspace_id", workspaceBuild.WorkspaceID),
-			slog.F("agent_id", workspaceAgent.ID),
-		),
+func (api *API) handleNetworkTelemetry(batch []*tailnetproto.TelemetryEvent) {
+	var (
+		telemetryEvents = make([]telemetry.NetworkEvent, 0, len(batch))
+		didLogErr       = false
+	)
+	for _, pEvent := range batch {
+		tEvent, err := telemetry.NetworkEventFromProto(pEvent)
+		if err != nil {
+			if !didLogErr {
+				api.Logger.Warn(api.ctx, "error converting network telemetry event", slog.Error(err))
+				didLogErr = true
+			}
+			// Events that fail to be converted get discarded for now.
+			continue
+		}
+		telemetryEvents = append(telemetryEvents, tEvent)
 	}
-	monitor.init()
-	monitor.start(ctx)
 
-	return monitor
+	api.Telemetry.Report(&telemetry.Snapshot{
+		NetworkEvents: telemetryEvents,
+	})
 }
 
 type yamuxPingerCloser struct {

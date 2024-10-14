@@ -28,6 +28,7 @@ import (
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
 	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/coderd/wsbuilder"
 	"github.com/coder/coder/v2/codersdk"
 )
@@ -374,7 +375,7 @@ func (api *API) postWorkspaceBuilds(rw http.ResponseWriter, r *http.Request) {
 	workspaceBuild, provisionerJob, err := builder.Build(
 		ctx,
 		api.Database,
-		func(action rbac.Action, object rbac.Objecter) bool {
+		func(action policy.Action, object rbac.Objecter) bool {
 			return api.Authorize(r, action, object)
 		},
 		audit.WorkspaceBuildBaggageFromRequest(r),
@@ -554,7 +555,7 @@ func (api *API) verifyUserCanCancelWorkspaceBuilds(ctx context.Context, userID u
 	if err != nil {
 		return false, xerrors.New("user does not exist")
 	}
-	return slices.Contains(user.RBACRoles, rbac.RoleOwner()), nil // only user with "owner" role can cancel workspace builds
+	return slices.Contains(user.RBACRoles, rbac.RoleOwner().String()), nil // only user with "owner" role can cancel workspace builds
 }
 
 // @Summary Get build parameters for workspace build
@@ -636,7 +637,7 @@ func (api *API) workspaceBuildState(rw http.ResponseWriter, r *http.Request) {
 
 	// You must have update permissions on the template to get the state.
 	// This matches a push!
-	if !api.Authorize(r, rbac.ActionUpdate, template.RBACObject()) {
+	if !api.Authorize(r, policy.ActionUpdate, template.RBACObject()) {
 		httpapi.ResourceNotFound(rw)
 		return
 	}
@@ -644,6 +645,32 @@ func (api *API) workspaceBuildState(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	_, _ = rw.Write(workspaceBuild.ProvisionerState)
+}
+
+// @Summary Get workspace build timings by ID
+// @ID get-workspace-build-timings-by-id
+// @Security CoderSessionToken
+// @Produce json
+// @Tags Builds
+// @Param workspacebuild path string true "Workspace build ID" format(uuid)
+// @Success 200 {object} codersdk.WorkspaceBuildTimings
+// @Router /workspacebuilds/{workspacebuild}/timings [get]
+func (api *API) workspaceBuildTimings(rw http.ResponseWriter, r *http.Request) {
+	var (
+		ctx   = r.Context()
+		build = httpmw.WorkspaceBuildParam(r)
+	)
+
+	timings, err := api.buildTimings(ctx, build)
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: "Internal error fetching timings.",
+			Detail:  err.Error(),
+		})
+		return
+	}
+
+	httpapi.Write(ctx, rw, http.StatusOK, timings)
 }
 
 type workspaceBuildsData struct {
@@ -1008,4 +1035,45 @@ func convertWorkspaceStatus(jobStatus codersdk.ProvisionerJobStatus, transition 
 
 	// return error status since we should never get here
 	return codersdk.WorkspaceStatusFailed
+}
+
+func (api *API) buildTimings(ctx context.Context, build database.WorkspaceBuild) (codersdk.WorkspaceBuildTimings, error) {
+	provisionerTimings, err := api.Database.GetProvisionerJobTimingsByJobID(ctx, build.JobID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return codersdk.WorkspaceBuildTimings{}, xerrors.Errorf("fetching provisioner job timings: %w", err)
+	}
+
+	agentScriptTimings, err := api.Database.GetWorkspaceAgentScriptTimingsByBuildID(ctx, build.ID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return codersdk.WorkspaceBuildTimings{}, xerrors.Errorf("fetching workspace agent script timings: %w", err)
+	}
+
+	res := codersdk.WorkspaceBuildTimings{
+		ProvisionerTimings: make([]codersdk.ProvisionerTiming, 0, len(provisionerTimings)),
+		AgentScriptTimings: make([]codersdk.AgentScriptTiming, 0, len(agentScriptTimings)),
+	}
+
+	for _, t := range provisionerTimings {
+		res.ProvisionerTimings = append(res.ProvisionerTimings, codersdk.ProvisionerTiming{
+			JobID:     t.JobID,
+			Stage:     string(t.Stage),
+			Source:    t.Source,
+			Action:    t.Action,
+			Resource:  t.Resource,
+			StartedAt: t.StartedAt,
+			EndedAt:   t.EndedAt,
+		})
+	}
+	for _, t := range agentScriptTimings {
+		res.AgentScriptTimings = append(res.AgentScriptTimings, codersdk.AgentScriptTiming{
+			StartedAt:   t.StartedAt,
+			EndedAt:     t.EndedAt,
+			ExitCode:    t.ExitCode,
+			Stage:       string(t.Stage),
+			Status:      string(t.Status),
+			DisplayName: t.DisplayName,
+		})
+	}
+
+	return res, nil
 }

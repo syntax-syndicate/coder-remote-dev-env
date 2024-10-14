@@ -14,6 +14,7 @@ import (
 	"cdr.dev/slog"
 	"github.com/coder/terraform-provider-coder/provider"
 
+	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/tracing"
 	"github.com/coder/coder/v2/provisionersdk"
 	"github.com/coder/coder/v2/provisionersdk/proto"
@@ -71,7 +72,7 @@ func (s *server) Plan(
 	defer cancel()
 	defer kill()
 
-	e := s.executor(sess.WorkDirectory)
+	e := s.executor(sess.WorkDirectory, database.ProvisionerJobTimingStagePlan)
 	if err := e.checkMinVersion(ctx); err != nil {
 		return provisionersdk.PlanErrorf(err.Error())
 	}
@@ -101,11 +102,22 @@ func (s *server) Plan(
 	}
 
 	s.logger.Debug(ctx, "running initialization")
+
+	// The JSON output of `terraform init` doesn't include discrete fields for capturing timings of each plugin,
+	// so we capture the whole init process.
+	initTimings := newTimingAggregator(database.ProvisionerJobTimingStageInit)
+	initTimings.ingest(createInitTimingsEvent(timingInitStart))
+
 	err = e.init(ctx, killCtx, sess)
 	if err != nil {
+		initTimings.ingest(createInitTimingsEvent(timingInitErrored))
+
 		s.logger.Debug(ctx, "init failed", slog.Error(err))
 		return provisionersdk.PlanErrorf("initialize terraform: %s", err)
 	}
+
+	initTimings.ingest(createInitTimingsEvent(timingInitComplete))
+
 	s.logger.Debug(ctx, "ran initialization")
 
 	env, err := provisionEnv(sess.Config, request.Metadata, request.RichParameterValues, request.ExternalAuthProviders)
@@ -125,6 +137,10 @@ func (s *server) Plan(
 	if err != nil {
 		return provisionersdk.PlanErrorf(err.Error())
 	}
+
+	// Prepend init timings since they occur prior to plan timings.
+	// Order is irrelevant; this is merely indicative.
+	resp.Timings = append(initTimings.aggregate(), resp.Timings...)
 	return resp
 }
 
@@ -137,7 +153,7 @@ func (s *server) Apply(
 	defer cancel()
 	defer kill()
 
-	e := s.executor(sess.WorkDirectory)
+	e := s.executor(sess.WorkDirectory, database.ProvisionerJobTimingStageApply)
 	if err := e.checkMinVersion(ctx); err != nil {
 		return provisionersdk.ApplyErrorf(err.Error())
 	}
@@ -202,12 +218,15 @@ func provisionEnv(
 		"CODER_WORKSPACE_OWNER_NAME="+metadata.GetWorkspaceOwnerName(),
 		"CODER_WORKSPACE_OWNER_OIDC_ACCESS_TOKEN="+metadata.GetWorkspaceOwnerOidcAccessToken(),
 		"CODER_WORKSPACE_OWNER_GROUPS="+string(ownerGroups),
+		"CODER_WORKSPACE_OWNER_SSH_PUBLIC_KEY="+metadata.GetWorkspaceOwnerSshPublicKey(),
+		"CODER_WORKSPACE_OWNER_SSH_PRIVATE_KEY="+metadata.GetWorkspaceOwnerSshPrivateKey(),
 		"CODER_WORKSPACE_ID="+metadata.GetWorkspaceId(),
 		"CODER_WORKSPACE_OWNER_ID="+metadata.GetWorkspaceOwnerId(),
 		"CODER_WORKSPACE_OWNER_SESSION_TOKEN="+metadata.GetWorkspaceOwnerSessionToken(),
 		"CODER_WORKSPACE_TEMPLATE_ID="+metadata.GetTemplateId(),
 		"CODER_WORKSPACE_TEMPLATE_NAME="+metadata.GetTemplateName(),
 		"CODER_WORKSPACE_TEMPLATE_VERSION="+metadata.GetTemplateVersion(),
+		"CODER_WORKSPACE_BUILD_ID="+metadata.GetWorkspaceBuildId(),
 	)
 	for key, value := range provisionersdk.AgentScriptEnv() {
 		env = append(env, key+"="+value)

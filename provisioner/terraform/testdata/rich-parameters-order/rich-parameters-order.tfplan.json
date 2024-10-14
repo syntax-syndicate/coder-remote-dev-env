@@ -1,6 +1,6 @@
 {
   "format_version": "1.2",
-  "terraform_version": "1.5.5",
+  "terraform_version": "1.9.2",
   "planned_values": {
     "root_module": {
       "resources": [
@@ -20,6 +20,7 @@
             "login_before_ready": true,
             "metadata": [],
             "motd_file": null,
+            "order": null,
             "os": "windows",
             "shutdown_script": null,
             "shutdown_script_timeout": 300,
@@ -29,7 +30,9 @@
             "troubleshooting_url": null
           },
           "sensitive_values": {
-            "metadata": []
+            "display_apps": [],
+            "metadata": [],
+            "token": true
           }
         },
         {
@@ -68,6 +71,7 @@
           "login_before_ready": true,
           "metadata": [],
           "motd_file": null,
+          "order": null,
           "os": "windows",
           "shutdown_script": null,
           "shutdown_script_timeout": 300,
@@ -77,6 +81,7 @@
           "troubleshooting_url": null
         },
         "after_unknown": {
+          "display_apps": true,
           "id": true,
           "init_script": true,
           "metadata": [],
@@ -84,6 +89,7 @@
         },
         "before_sensitive": false,
         "after_sensitive": {
+          "display_apps": [],
           "metadata": [],
           "token": true
         }
@@ -113,7 +119,7 @@
   ],
   "prior_state": {
     "format_version": "1.0",
-    "terraform_version": "1.5.5",
+    "terraform_version": "1.9.2",
     "values": {
       "root_module": {
         "resources": [
@@ -128,10 +134,9 @@
               "default": null,
               "description": null,
               "display_name": null,
+              "ephemeral": false,
               "icon": null,
-              "id": "245304bd-d7c0-4dc0-b4b2-90a036245af0",
-              "legacy_variable": null,
-              "legacy_variable_name": null,
+              "id": "2505d55b-a9f4-4aaa-90fd-b4f36079e2fd",
               "mutable": false,
               "name": "Example",
               "option": null,
@@ -156,10 +161,9 @@
               "default": "ok",
               "description": "blah blah",
               "display_name": null,
+              "ephemeral": false,
               "icon": null,
-              "id": "bccaddc6-97f1-48aa-a1c0-3438cc96139d",
-              "legacy_variable": null,
-              "legacy_variable_name": null,
+              "id": "ad73ddbc-2c11-45a1-913c-b73cdd3b9b0f",
               "mutable": false,
               "name": "Sample",
               "option": null,
@@ -182,7 +186,7 @@
       "coder": {
         "name": "coder",
         "full_name": "registry.terraform.io/coder/coder",
-        "version_constraint": "0.9.0"
+        "version_constraint": "0.22.0"
       },
       "null": {
         "name": "null",
@@ -265,5 +269,8 @@
       ]
     }
   },
-  "timestamp": "2023-08-30T19:25:32Z"
+  "timestamp": "2024-07-15T17:48:58Z",
+  "applyable": true,
+  "complete": true,
+  "errored": false
 }

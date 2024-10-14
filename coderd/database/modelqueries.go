@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -17,6 +18,29 @@ const (
 	authorizedQueryPlaceholder = "-- @authorize_filter"
 )
 
+// ExpectOne can be used to convert a ':many:' query into a ':one'
+// query. To reduce the quantity of SQL queries, a :many with a filter is used.
+// These filters sometimes are expected to return just 1 row.
+//
+// A :many query will never return a sql.ErrNoRows, but a :one does.
+// This function will correct the error for the empty set.
+func ExpectOne[T any](ret []T, err error) (T, error) {
+	var empty T
+	if err != nil {
+		return empty, err
+	}
+
+	if len(ret) == 0 {
+		return empty, sql.ErrNoRows
+	}
+
+	if len(ret) > 1 {
+		return empty, xerrors.Errorf("too many rows returned, expected 1")
+	}
+
+	return ret[0], nil
+}
+
 // customQuerier encompasses all non-generated queries.
 // It provides a flexible way to write queries for cases
 // where sqlc proves inadequate.
@@ -24,6 +48,7 @@ type customQuerier interface {
 	templateQuerier
 	workspaceQuerier
 	userQuerier
+	auditLogQuerier
 }
 
 type templateQuerier interface {
@@ -51,6 +76,7 @@ func (q *sqlQuerier) GetAuthorizedTemplates(ctx context.Context, arg GetTemplate
 		arg.Deleted,
 		arg.OrganizationID,
 		arg.ExactName,
+		arg.FuzzyName,
 		pq.Array(arg.IDs),
 		arg.Deprecated,
 	)
@@ -92,6 +118,9 @@ func (q *sqlQuerier) GetAuthorizedTemplates(ctx context.Context, arg GetTemplate
 			&i.MaxPortSharingLevel,
 			&i.CreatedByAvatarURL,
 			&i.CreatedByUsername,
+			&i.OrganizationName,
+			&i.OrganizationDisplayName,
+			&i.OrganizationIcon,
 		); err != nil {
 			return nil, err
 		}
@@ -138,7 +167,7 @@ func (q *sqlQuerier) GetTemplateUserRoles(ctx context.Context, id uuid.UUID) ([]
 	WHERE
 		users.deleted = false
 	AND
-		users.status = 'active';
+		users.status != 'suspended';
 	`
 
 	var tus []TemplateUser
@@ -218,6 +247,7 @@ func (q *sqlQuerier) GetAuthorizedWorkspaces(ctx context.Context, arg GetWorkspa
 		arg.Deleted,
 		arg.Status,
 		arg.OwnerID,
+		arg.OrganizationID,
 		pq.Array(arg.HasParam),
 		arg.OwnerUsername,
 		arg.TemplateName,
@@ -333,6 +363,97 @@ func (q *sqlQuerier) GetAuthorizedUsers(ctx context.Context, arg GetUsersParams,
 			&i.QuietHoursSchedule,
 			&i.ThemePreference,
 			&i.Name,
+			&i.GithubComUserID,
+			&i.HashedOneTimePasscode,
+			&i.OneTimePasscodeExpiresAt,
+			&i.MustResetPassword,
+			&i.Count,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+type auditLogQuerier interface {
+	GetAuthorizedAuditLogsOffset(ctx context.Context, arg GetAuditLogsOffsetParams, prepared rbac.PreparedAuthorized) ([]GetAuditLogsOffsetRow, error)
+}
+
+func (q *sqlQuerier) GetAuthorizedAuditLogsOffset(ctx context.Context, arg GetAuditLogsOffsetParams, prepared rbac.PreparedAuthorized) ([]GetAuditLogsOffsetRow, error) {
+	authorizedFilter, err := prepared.CompileToSQL(ctx, regosql.ConvertConfig{
+		VariableConverter: regosql.AuditLogConverter(),
+	})
+	if err != nil {
+		return nil, xerrors.Errorf("compile authorized filter: %w", err)
+	}
+
+	filtered, err := insertAuthorizedFilter(getAuditLogsOffset, fmt.Sprintf(" AND %s", authorizedFilter))
+	if err != nil {
+		return nil, xerrors.Errorf("insert authorized filter: %w", err)
+	}
+
+	query := fmt.Sprintf("-- name: GetAuthorizedAuditLogsOffset :many\n%s", filtered)
+	rows, err := q.db.QueryContext(ctx, query,
+		arg.ResourceType,
+		arg.ResourceID,
+		arg.OrganizationID,
+		arg.ResourceTarget,
+		arg.Action,
+		arg.UserID,
+		arg.Username,
+		arg.Email,
+		arg.DateFrom,
+		arg.DateTo,
+		arg.BuildReason,
+		arg.OffsetOpt,
+		arg.LimitOpt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAuditLogsOffsetRow
+	for rows.Next() {
+		var i GetAuditLogsOffsetRow
+		if err := rows.Scan(
+			&i.AuditLog.ID,
+			&i.AuditLog.Time,
+			&i.AuditLog.UserID,
+			&i.AuditLog.OrganizationID,
+			&i.AuditLog.Ip,
+			&i.AuditLog.UserAgent,
+			&i.AuditLog.ResourceType,
+			&i.AuditLog.ResourceID,
+			&i.AuditLog.ResourceTarget,
+			&i.AuditLog.Action,
+			&i.AuditLog.Diff,
+			&i.AuditLog.StatusCode,
+			&i.AuditLog.AdditionalFields,
+			&i.AuditLog.RequestID,
+			&i.AuditLog.ResourceIcon,
+			&i.UserUsername,
+			&i.UserName,
+			&i.UserEmail,
+			&i.UserCreatedAt,
+			&i.UserUpdatedAt,
+			&i.UserLastSeenAt,
+			&i.UserStatus,
+			&i.UserLoginType,
+			&i.UserRoles,
+			&i.UserAvatarUrl,
+			&i.UserDeleted,
+			&i.UserThemePreference,
+			&i.UserQuietHoursSchedule,
+			&i.OrganizationName,
+			&i.OrganizationDisplayName,
+			&i.OrganizationIcon,
 			&i.Count,
 		); err != nil {
 			return nil, err

@@ -267,6 +267,8 @@ func TestMigrateUpWithFixtures(t *testing.T) {
 		"workspace_build_parameters",
 		"template_version_variables",
 		"dbcrypt_keys", // having zero rows is a valid state for this table
+		"template_version_workspace_tags",
+		"notification_report_generator_logs",
 	}
 	s := &tableStats{s: make(map[string]int)}
 

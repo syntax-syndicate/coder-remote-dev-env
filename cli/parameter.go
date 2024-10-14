@@ -18,14 +18,16 @@ type workspaceParameterFlags struct {
 	promptBuildOptions bool
 	buildOptions       []string
 
-	richParameterFile string
-	richParameters    []string
+	richParameterFile     string
+	richParameters        []string
+	richParameterDefaults []string
 
 	promptRichParameters bool
 }
 
 func (wpf *workspaceParameterFlags) allOptions() []serpent.Option {
 	options := append(wpf.cliBuildOptions(), wpf.cliParameters()...)
+	options = append(options, wpf.cliParameterDefaults()...)
 	return append(options, wpf.alwaysPrompt())
 }
 
@@ -56,8 +58,19 @@ func (wpf *workspaceParameterFlags) cliParameters() []serpent.Option {
 		serpent.Option{
 			Flag:        "rich-parameter-file",
 			Env:         "CODER_RICH_PARAMETER_FILE",
-			Description: "Specify a file path with values for rich parameters defined in the template.",
+			Description: "Specify a file path with values for rich parameters defined in the template. The file should be in YAML format, containing key-value pairs for the parameters.",
 			Value:       serpent.StringOf(&wpf.richParameterFile),
+		},
+	}
+}
+
+func (wpf *workspaceParameterFlags) cliParameterDefaults() []serpent.Option {
+	return serpent.OptionSet{
+		serpent.Option{
+			Flag:        "parameter-default",
+			Env:         "CODER_RICH_PARAMETER_DEFAULT",
+			Description: `Rich parameter default values in the format "name=value".`,
+			Value:       serpent.StringArrayOf(&wpf.richParameterDefaults),
 		},
 	}
 }
@@ -113,4 +126,22 @@ func parseParameterMapFile(parameterFile string) (map[string]string, error) {
 		}
 	}
 	return parameterMap, nil
+}
+
+// buildFlags contains options relating to troubleshooting provisioner jobs.
+type buildFlags struct {
+	provisionerLogDebug bool
+}
+
+func (bf *buildFlags) cliOptions() []serpent.Option {
+	return []serpent.Option{
+		{
+			Flag: "provisioner-log-debug",
+			Description: `Sets the provisioner log level to debug.
+This will print additional information about the build process.
+This is useful for troubleshooting build issues.`,
+			Value:  serpent.BoolOf(&bf.provisionerLogDebug),
+			Hidden: true,
+		},
+	}
 }

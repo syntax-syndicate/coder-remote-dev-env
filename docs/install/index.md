@@ -24,6 +24,11 @@ alternate installation methods (e.g. standalone binaries, system packages).
 
 ## Windows
 
+> **Important:** If you plan to use the built-in PostgreSQL database, you will
+> need to ensure that the
+> [Visual C++ Runtime](https://learn.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist#latest-microsoft-visual-c-redistributable-version)
+> is installed.
+
 Use [GitHub releases](https://github.com/coder/coder/releases) to download the
 Windows installer (`.msi`) or standalone binary (`.exe`).
 
@@ -57,6 +62,7 @@ To log in to an existing Coder deployment:
 coder login https://coder.example.com
 ```
 
-## Next up
+## Next steps
 
-- [Create your first template](../templates/tutorial.md)
+- [Set up your first deployment](../start/coder-tour.md)
+- [Expose your control plane to other users](../admin/setup/index.md)

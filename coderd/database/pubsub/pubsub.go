@@ -3,16 +3,20 @@ package pubsub
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/xerrors"
+
+	"github.com/coder/coder/v2/coderd/database"
 
 	"cdr.dev/slog"
 )
@@ -27,6 +31,9 @@ type ListenerWithErr func(ctx context.Context, message []byte, err error)
 // ErrDroppedMessages is sent to ListenerWithErr if messages are dropped or
 // might have been dropped.
 var ErrDroppedMessages = xerrors.New("dropped messages")
+
+// LatencyMeasureTimeout defines how often to trigger a new background latency measurement.
+const LatencyMeasureTimeout = time.Second * 10
 
 // Pubsub is a generic interface for broadcasting and receiving messages.
 // Implementors should assume high-availability with the backing implementation.
@@ -205,6 +212,10 @@ type PGPubsub struct {
 	receivedBytesTotal  prometheus.Counter
 	disconnectionsTotal prometheus.Counter
 	connected           prometheus.Gauge
+
+	latencyMeasurer       *LatencyMeasurer
+	latencyMeasureCounter atomic.Int64
+	latencyErrCounter     atomic.Int64
 }
 
 // BufferSize is the maximum number of unhandled messages we will buffer
@@ -402,7 +413,7 @@ func (d logDialer) DialContext(ctx context.Context, network, address string) (ne
 
 	logger := d.logger.With(slog.F("network", network), slog.F("address", address), slog.F("timeout_ms", timeoutMS))
 
-	logger.Info(ctx, "pubsub dialing postgres")
+	logger.Debug(ctx, "pubsub dialing postgres")
 	start := time.Now()
 	conn, err := d.d.DialContext(ctx, network, address)
 	if err != nil {
@@ -410,7 +421,7 @@ func (d logDialer) DialContext(ctx context.Context, network, address string) (ne
 		return nil, err
 	}
 	elapsed := time.Since(start)
-	logger.Info(ctx, "pubsub postgres TCP connection established", slog.F("elapsed_ms", elapsed.Milliseconds()))
+	logger.Debug(ctx, "pubsub postgres TCP connection established", slog.F("elapsed_ms", elapsed.Milliseconds()))
 	return conn, nil
 }
 
@@ -424,12 +435,38 @@ func (p *PGPubsub) startListener(ctx context.Context, connectURL string) error {
 			// pq.defaultDialer uses a zero net.Dialer as well.
 			d: net.Dialer{},
 		}
+		connector driver.Connector
+		err       error
 	)
+
+	// Create a custom connector if the database driver supports it.
+	connectorCreator, ok := p.db.Driver().(database.ConnectorCreator)
+	if ok {
+		connector, err = connectorCreator.Connector(connectURL)
+		if err != nil {
+			return xerrors.Errorf("create custom connector: %w", err)
+		}
+	} else {
+		// use the default pq connector otherwise
+		connector, err = pq.NewConnector(connectURL)
+		if err != nil {
+			return xerrors.Errorf("create pq connector: %w", err)
+		}
+	}
+
+	// Set the dialer if the connector supports it.
+	dc, ok := connector.(database.DialerConnector)
+	if !ok {
+		p.logger.Critical(ctx, "connector does not support setting log dialer, database connection debug logs will be missing")
+	} else {
+		dc.Dialer(dialer)
+	}
+
 	p.pgListener = pqListenerShim{
-		Listener: pq.NewDialListener(dialer, connectURL, time.Second, time.Minute, func(t pq.ListenerEventType, err error) {
+		Listener: pq.NewConnectorListener(connector, connectURL, time.Second, time.Minute, func(t pq.ListenerEventType, err error) {
 			switch t {
 			case pq.ListenerEventConnected:
-				p.logger.Info(ctx, "pubsub connected to postgres")
+				p.logger.Debug(ctx, "pubsub connected to postgres")
 				p.connected.Set(1.0)
 			case pq.ListenerEventDisconnected:
 				p.logger.Error(ctx, "pubsub disconnected from postgres", slog.Error(err))
@@ -478,6 +515,30 @@ var (
 	)
 )
 
+// additional metrics collected out-of-band
+var (
+	pubsubSendLatencyDesc = prometheus.NewDesc(
+		"coder_pubsub_send_latency_seconds",
+		"The time taken to send a message into a pubsub event channel",
+		nil, nil,
+	)
+	pubsubRecvLatencyDesc = prometheus.NewDesc(
+		"coder_pubsub_receive_latency_seconds",
+		"The time taken to receive a message from a pubsub event channel",
+		nil, nil,
+	)
+	pubsubLatencyMeasureCountDesc = prometheus.NewDesc(
+		"coder_pubsub_latency_measures_total",
+		"The number of pubsub latency measurements",
+		nil, nil,
+	)
+	pubsubLatencyMeasureErrDesc = prometheus.NewDesc(
+		"coder_pubsub_latency_measure_errs_total",
+		"The number of pubsub latency measurement failures",
+		nil, nil,
+	)
+)
+
 // We'll track messages as size "normal" and "colossal", where the
 // latter are messages larger than 7600 bytes, or 95% of the postgres
 // notify limit. If we see a lot of colossal packets that's an indication that
@@ -504,6 +565,12 @@ func (p *PGPubsub) Describe(descs chan<- *prometheus.Desc) {
 	// implicit metrics
 	descs <- currentSubscribersDesc
 	descs <- currentEventsDesc
+
+	// additional metrics
+	descs <- pubsubSendLatencyDesc
+	descs <- pubsubRecvLatencyDesc
+	descs <- pubsubLatencyMeasureCountDesc
+	descs <- pubsubLatencyMeasureErrDesc
 }
 
 // Collect implements, along with Describe, the prometheus.Collector interface
@@ -528,26 +595,41 @@ func (p *PGPubsub) Collect(metrics chan<- prometheus.Metric) {
 	p.qMu.Unlock()
 	metrics <- prometheus.MustNewConstMetric(currentSubscribersDesc, prometheus.GaugeValue, float64(subs))
 	metrics <- prometheus.MustNewConstMetric(currentEventsDesc, prometheus.GaugeValue, float64(events))
+
+	// additional metrics
+	ctx, cancel := context.WithTimeout(context.Background(), LatencyMeasureTimeout)
+	defer cancel()
+	send, recv, err := p.latencyMeasurer.Measure(ctx, p)
+
+	metrics <- prometheus.MustNewConstMetric(pubsubLatencyMeasureCountDesc, prometheus.CounterValue, float64(p.latencyMeasureCounter.Add(1)))
+	if err != nil {
+		p.logger.Warn(context.Background(), "failed to measure latency", slog.Error(err))
+		metrics <- prometheus.MustNewConstMetric(pubsubLatencyMeasureErrDesc, prometheus.CounterValue, float64(p.latencyErrCounter.Add(1)))
+		return
+	}
+	metrics <- prometheus.MustNewConstMetric(pubsubSendLatencyDesc, prometheus.GaugeValue, send.Seconds())
+	metrics <- prometheus.MustNewConstMetric(pubsubRecvLatencyDesc, prometheus.GaugeValue, recv.Seconds())
 }
 
 // New creates a new Pubsub implementation using a PostgreSQL connection.
-func New(startCtx context.Context, logger slog.Logger, database *sql.DB, connectURL string) (*PGPubsub, error) {
-	p := newWithoutListener(logger, database)
+func New(startCtx context.Context, logger slog.Logger, db *sql.DB, connectURL string) (*PGPubsub, error) {
+	p := newWithoutListener(logger, db)
 	if err := p.startListener(startCtx, connectURL); err != nil {
 		return nil, err
 	}
 	go p.listen()
-	logger.Info(startCtx, "pubsub has started")
+	logger.Debug(startCtx, "pubsub has started")
 	return p, nil
 }
 
 // newWithoutListener creates a new PGPubsub without creating the pqListener.
-func newWithoutListener(logger slog.Logger, database *sql.DB) *PGPubsub {
+func newWithoutListener(logger slog.Logger, db *sql.DB) *PGPubsub {
 	return &PGPubsub{
-		logger:     logger,
-		listenDone: make(chan struct{}),
-		db:         database,
-		queues:     make(map[string]map[uuid.UUID]*msgQueue),
+		logger:          logger,
+		listenDone:      make(chan struct{}),
+		db:              db,
+		queues:          make(map[string]map[uuid.UUID]*msgQueue),
+		latencyMeasurer: NewLatencyMeasurer(logger.Named("latency-measurer")),
 
 		publishesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "coder",

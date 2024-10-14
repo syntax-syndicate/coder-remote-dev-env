@@ -36,10 +36,19 @@ const (
 
 	CodeDERPNodeUsesWebsocket Code = `EDERP01`
 	CodeDERPOneNodeUnhealthy  Code = `EDERP02`
+	CodeSTUNNoNodes                = `ESTUN01`
+	CodeSTUNMapVaryDest            = `ESTUN02`
 
 	CodeProvisionerDaemonsNoProvisionerDaemons     Code = `EPD01`
 	CodeProvisionerDaemonVersionMismatch           Code = `EPD02`
 	CodeProvisionerDaemonAPIMajorVersionDeprecated Code = `EPD03`
+
+	CodeInterfaceSmallMTU = `EIF01`
+)
+
+// Default docs URL
+var (
+	docsURLDefault = "https://coder.com/docs"
 )
 
 // @typescript-generate Severity
@@ -68,6 +77,25 @@ func (m Message) String() string {
 	_, _ = sb.WriteRune(' ')
 	_, _ = sb.WriteString(m.Message)
 	return sb.String()
+}
+
+// URL returns a link to the admin/healthcheck docs page for the given Message.
+// NOTE: if using a custom docs URL, specify base.
+func (m Message) URL(base string) string {
+	var codeAnchor string
+	if m.Code == "" {
+		codeAnchor = strings.ToLower(string(CodeUnknown))
+	} else {
+		codeAnchor = strings.ToLower(string(m.Code))
+	}
+
+	if base == "" {
+		base = docsURLDefault
+		return fmt.Sprintf("%s/admin/healthcheck#%s", base, codeAnchor)
+	}
+
+	// We don't assume that custom docs URLs are versioned.
+	return fmt.Sprintf("%s/admin/healthcheck#%s", base, codeAnchor)
 }
 
 // Code is a stable identifier used to link to documentation.

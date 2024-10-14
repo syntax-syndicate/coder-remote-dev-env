@@ -62,6 +62,7 @@ INSERT INTO
 		id,
 		email,
 		username,
+		name,
 		hashed_password,
 		created_at,
 		updated_at,
@@ -69,7 +70,7 @@ INSERT INTO
 		login_type
 	)
 VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
+	($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;
 
 -- name: UpdateUserProfile :one
 UPDATE
@@ -83,6 +84,14 @@ SET
 WHERE
 	id = $1
 RETURNING *;
+
+-- name: UpdateUserGithubComUserID :exec
+UPDATE
+	users
+SET
+	github_com_user_id = $2
+WHERE
+	id = $1;
 
 -- name: UpdateUserAppearanceSettings :one
 UPDATE
@@ -108,7 +117,9 @@ RETURNING *;
 UPDATE
 	users
 SET
-	hashed_password = $2
+	hashed_password = $2,
+	hashed_one_time_passcode = NULL,
+	one_time_passcode_expires_at = NULL
 WHERE
 	id = $1;
 
@@ -227,12 +238,14 @@ SELECT
 		array_append(users.rbac_roles, 'member'),
 		(
 			SELECT
-				array_agg(org_roles)
+				-- The roles are returned as a flat array, org scoped and site side.
+				-- Concatenating the organization id scopes the organization roles.
+				array_agg(org_roles || ':' || organization_members.organization_id::text)
 			FROM
 				organization_members,
-				-- All org_members get the org-member role for their orgs
+				-- All org_members get the organization-member role for their orgs
 				unnest(
-					array_append(roles, 'organization-member:' || organization_members.organization_id::text)
+					array_append(roles, 'organization-member')
 				) AS org_roles
 			WHERE
 				user_id = users.id
@@ -278,3 +291,13 @@ RETURNING id, email, last_seen_at;
 -- AllUserIDs returns all UserIDs regardless of user status or deletion.
 -- name: AllUserIDs :many
 SELECT DISTINCT id FROM USERS;
+
+-- name: UpdateUserHashedOneTimePasscode :exec
+UPDATE
+    users
+SET
+    hashed_one_time_passcode = $2,
+    one_time_passcode_expires_at = $3
+WHERE
+    id = $1
+;

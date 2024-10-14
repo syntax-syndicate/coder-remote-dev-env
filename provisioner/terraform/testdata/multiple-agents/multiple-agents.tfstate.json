@@ -1,6 +1,6 @@
 {
   "format_version": "1.0",
-  "terraform_version": "1.5.5",
+  "terraform_version": "1.9.2",
   "values": {
     "root_module": {
       "resources": [
@@ -16,22 +16,35 @@
             "auth": "token",
             "connection_timeout": 120,
             "dir": null,
+            "display_apps": [
+              {
+                "port_forwarding_helper": true,
+                "ssh_helper": true,
+                "vscode": true,
+                "vscode_insiders": false,
+                "web_terminal": true
+              }
+            ],
             "env": null,
-            "id": "094d300c-f07a-4357-870f-6ca1fc9154a2",
+            "id": "a777f1dc-7e43-497d-bac5-56ad5a2d7f7e",
             "init_script": "",
             "login_before_ready": true,
             "metadata": [],
             "motd_file": null,
+            "order": null,
             "os": "linux",
             "shutdown_script": null,
             "shutdown_script_timeout": 300,
             "startup_script": null,
             "startup_script_behavior": null,
             "startup_script_timeout": 300,
-            "token": "27bd44bc-0126-4c8d-9b98-8f27619e3656",
+            "token": "6df4262d-7ce5-41c7-b9ad-84df6d20070e",
             "troubleshooting_url": null
           },
           "sensitive_values": {
+            "display_apps": [
+              {}
+            ],
             "metadata": [],
             "token": true
           }
@@ -48,22 +61,35 @@
             "auth": "token",
             "connection_timeout": 1,
             "dir": null,
+            "display_apps": [
+              {
+                "port_forwarding_helper": true,
+                "ssh_helper": true,
+                "vscode": true,
+                "vscode_insiders": false,
+                "web_terminal": true
+              }
+            ],
             "env": null,
-            "id": "bb844516-2cdd-419c-87e1-d0d3ea69fe78",
+            "id": "2f29a1dd-04ad-4360-bada-51a73dc1d352",
             "init_script": "",
             "login_before_ready": true,
             "metadata": [],
             "motd_file": "/etc/motd",
+            "order": null,
             "os": "darwin",
             "shutdown_script": "echo bye bye",
             "shutdown_script_timeout": 30,
             "startup_script": null,
             "startup_script_behavior": "non-blocking",
             "startup_script_timeout": 30,
-            "token": "8a31b688-d3d2-4c22-b37e-c9810b9b329a",
+            "token": "52549a72-6199-4fab-beb1-27131129f94d",
             "troubleshooting_url": null
           },
           "sensitive_values": {
+            "display_apps": [
+              {}
+            ],
             "metadata": [],
             "token": true
           }
@@ -80,22 +106,35 @@
             "auth": "token",
             "connection_timeout": 120,
             "dir": null,
+            "display_apps": [
+              {
+                "port_forwarding_helper": true,
+                "ssh_helper": true,
+                "vscode": true,
+                "vscode_insiders": false,
+                "web_terminal": true
+              }
+            ],
             "env": null,
-            "id": "c6123c01-0543-4102-bdcf-f0ee2a9c1269",
+            "id": "7df8745b-3cd4-4638-a637-f370fc17973d",
             "init_script": "",
             "login_before_ready": true,
             "metadata": [],
             "motd_file": null,
+            "order": null,
             "os": "windows",
             "shutdown_script": null,
             "shutdown_script_timeout": 300,
             "startup_script": null,
             "startup_script_behavior": "blocking",
             "startup_script_timeout": 300,
-            "token": "64185462-292f-4b75-b350-625326ba596e",
+            "token": "bf843f72-6965-4000-b1ec-02f158556f5e",
             "troubleshooting_url": "https://coder.com/troubleshoot"
           },
           "sensitive_values": {
+            "display_apps": [
+              {}
+            ],
             "metadata": [],
             "token": true
           }
@@ -112,22 +151,35 @@
             "auth": "token",
             "connection_timeout": 120,
             "dir": null,
+            "display_apps": [
+              {
+                "port_forwarding_helper": true,
+                "ssh_helper": true,
+                "vscode": true,
+                "vscode_insiders": false,
+                "web_terminal": true
+              }
+            ],
             "env": null,
-            "id": "85d0614c-3e44-4f20-b4bf-a015c8dfcaac",
+            "id": "6a756f61-0050-4372-b458-35d38b595a79",
             "init_script": "",
             "login_before_ready": false,
             "metadata": [],
             "motd_file": null,
+            "order": null,
             "os": "linux",
             "shutdown_script": null,
             "shutdown_script_timeout": 300,
             "startup_script": null,
             "startup_script_behavior": null,
             "startup_script_timeout": 300,
-            "token": "021b1139-fa63-42ba-be1a-85f8456f3c28",
+            "token": "4ed633b5-eff0-48ac-8089-57ffeff02bdc",
             "troubleshooting_url": null
           },
           "sensitive_values": {
+            "display_apps": [
+              {}
+            ],
             "metadata": [],
             "token": true
           }
@@ -140,7 +192,7 @@
           "provider_name": "registry.terraform.io/hashicorp/null",
           "schema_version": 0,
           "values": {
-            "id": "6753149467284740901",
+            "id": "7329660528883337331",
             "triggers": null
           },
           "sensitive_values": {},

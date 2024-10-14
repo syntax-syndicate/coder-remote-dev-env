@@ -1,5 +1,5 @@
 // From codersdk/enums.go
-export type Enums = Enum[]
+export type EnumSliceType = Readonly<Array<Enum>>
 
 // From codersdk/enums.go
 export type Enum = "bar" | "baz" | "foo" | "qux"

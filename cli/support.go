@@ -101,7 +101,7 @@ func (r *RootCmd) supportBundle() *serpent.Command {
 
 			// Check if we're running inside a workspace
 			if val, found := os.LookupEnv("CODER"); found && val == "true" {
-				_, _ = fmt.Fprintln(inv.Stderr, "Running inside Coder workspace; this can affect results!")
+				cliui.Warn(inv.Stderr, "Running inside Coder workspace; this can affect results!")
 				cliLog.Debug(inv.Context(), "running inside coder workspace")
 			}
 
@@ -122,7 +122,7 @@ func (r *RootCmd) supportBundle() *serpent.Command {
 
 			if len(inv.Args) == 0 {
 				cliLog.Warn(inv.Context(), "no workspace specified")
-				_, _ = fmt.Fprintln(inv.Stderr, "Warning: no workspace specified. This will result in incomplete information.")
+				cliui.Warn(inv.Stderr, "No workspace specified. This will result in incomplete information.")
 			} else {
 				ws, err := namedWorkspace(inv.Context(), client, inv.Args[0])
 				if err != nil {
@@ -184,6 +184,8 @@ func (r *RootCmd) supportBundle() *serpent.Command {
 				_ = os.Remove(outputPath) // best effort
 				return xerrors.Errorf("create support bundle: %w", err)
 			}
+
+			summarizeBundle(inv, bun)
 			bun.CLILogs = cliLogBuf.Bytes()
 
 			if err := writeBundle(bun, zwr); err != nil {
@@ -191,6 +193,7 @@ func (r *RootCmd) supportBundle() *serpent.Command {
 				return xerrors.Errorf("write support bundle to %s: %w", outputPath, err)
 			}
 			_, _ = fmt.Fprintln(inv.Stderr, "Wrote support bundle to "+outputPath)
+
 			return nil
 		},
 	}
@@ -212,6 +215,40 @@ func (r *RootCmd) supportBundle() *serpent.Command {
 	}
 
 	return cmd
+}
+
+// summarizeBundle makes a best-effort attempt to write a short summary
+// of the support bundle to the user's terminal.
+func summarizeBundle(inv *serpent.Invocation, bun *support.Bundle) {
+	if bun == nil {
+		cliui.Error(inv.Stdout, "No support bundle generated!")
+		return
+	}
+
+	if bun.Deployment.Config == nil {
+		cliui.Error(inv.Stdout, "No deployment configuration available!")
+		return
+	}
+
+	docsURL := bun.Deployment.Config.Values.DocsURL.String()
+	if bun.Deployment.HealthReport == nil {
+		cliui.Error(inv.Stdout, "No deployment health report available!")
+		return
+	}
+	deployHealthSummary := bun.Deployment.HealthReport.Summarize(docsURL)
+	if len(deployHealthSummary) > 0 {
+		cliui.Warn(inv.Stdout, "Deployment health issues detected:", deployHealthSummary...)
+	}
+
+	if bun.Network.Netcheck == nil {
+		cliui.Error(inv.Stdout, "No network troubleshooting information available!")
+		return
+	}
+
+	clientNetcheckSummary := bun.Network.Netcheck.Summarize("Client netcheck:", docsURL)
+	if len(clientNetcheckSummary) > 0 {
+		cliui.Warn(inv.Stdout, "Networking issues detected:", deployHealthSummary...)
+	}
 }
 
 func findAgent(agentName string, haystack []codersdk.WorkspaceResource) (*codersdk.WorkspaceAgent, bool) {
@@ -243,6 +280,7 @@ func writeBundle(src *support.Bundle, dest *zip.Writer) error {
 		"deployment/health.json":          src.Deployment.HealthReport,
 		"network/connection_info.json":    src.Network.ConnectionInfo,
 		"network/netcheck.json":           src.Network.Netcheck,
+		"network/interfaces.json":         src.Network.Interfaces,
 		"workspace/template.json":         src.Workspace.Template,
 		"workspace/template_version.json": src.Workspace.TemplateVersion,
 		"workspace/parameters.json":       src.Workspace.Parameters,

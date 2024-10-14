@@ -65,6 +65,7 @@ import (
 	"github.com/coder/coder/v2/coderd/entitlements"
 	"github.com/coder/coder/v2/coderd/notifications/reports"
 	"github.com/coder/coder/v2/coderd/runtimeconfig"
+	"github.com/coder/coder/v2/coderd/workspaceprebuilds"
 
 	"github.com/coder/coder/v2/buildinfo"
 	"github.com/coder/coder/v2/cli/clilog"
@@ -1030,6 +1031,20 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 			)
 			options.WorkspaceUsageTracker = tracker
 			defer tracker.Close()
+
+			experiments := coderd.ReadExperiments(
+				options.Logger, options.DeploymentValues.Experiments.Value(),
+			)
+
+			// Always create the coordinator, but only Run() it if enabled.
+			options.PrebuildsController = *workspaceprebuilds.NewController(options.Database, options.Pubsub, coderAPI.Authorize, logger.Named("prebuilds"))
+			if experiments.Enabled(codersdk.ExperimentWorkspacePrebuilds) {
+				go func() {
+					// nolint:gocritic // TODO: create own role.
+					err = options.PrebuildsController.Run(dbauthz.AsSystemRestricted(ctx))
+					logger.Info(ctx, "prebuild coordinator exited", slog.Error(err))
+				}()
+			}
 
 			// Wrap the server in middleware that redirects to the access URL if
 			// the request is not to a local IP.

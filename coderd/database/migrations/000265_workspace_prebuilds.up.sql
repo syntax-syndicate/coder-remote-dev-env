@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS workspace_prebuild_pool CASCADE;
 CREATE TABLE workspace_prebuild_pool
 (
     id                  uuid        NOT NULL,
@@ -13,8 +14,7 @@ CREATE TABLE workspace_prebuild_pool
     created_at          timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE (name),
-    UNIQUE (template_id, template_version_id, parameters)
+    UNIQUE (name, template_id, template_version_id, parameters)
 );
 
 ALTER TABLE workspaces

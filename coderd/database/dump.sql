@@ -1950,13 +1950,10 @@ ALTER TABLE ONLY workspace_builds
     ADD CONSTRAINT workspace_builds_workspace_id_build_number_key UNIQUE (workspace_id, build_number);
 
 ALTER TABLE ONLY workspace_prebuild_pool
-    ADD CONSTRAINT workspace_prebuild_pool_name_key UNIQUE (name);
+    ADD CONSTRAINT workspace_prebuild_pool_name_template_id_template_version_i_key UNIQUE (name, template_id, template_version_id, parameters);
 
 ALTER TABLE ONLY workspace_prebuild_pool
     ADD CONSTRAINT workspace_prebuild_pool_pkey PRIMARY KEY (id);
-
-ALTER TABLE ONLY workspace_prebuild_pool
-    ADD CONSTRAINT workspace_prebuild_pool_template_id_template_version_id_par_key UNIQUE (template_id, template_version_id, parameters);
 
 ALTER TABLE ONLY workspace_proxies
     ADD CONSTRAINT workspace_proxies_pkey PRIMARY KEY (id);

@@ -133,8 +133,10 @@ Coder volume mounts.
 {{ end -}}
 {{- end }}
 {{ range $secret := .Values.coder.certs.secrets -}}
+{{ $ext := "crt" }}
+{{- if $secret.extension -}}{{- $ext = $secret.extension -}}{{- end -}}
 - name: "ca-cert-{{ $secret.name }}"
-  mountPath: "/etc/ssl/certs/{{ $secret.name }}.crt"
+  mountPath: "/etc/ssl/certs/{{ $secret.name }}.{{$ext}}"
   subPath: {{ $secret.key | quote }}
   readOnly: true
 {{ end -}}

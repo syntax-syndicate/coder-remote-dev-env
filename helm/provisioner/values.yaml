@@ -147,11 +147,12 @@ coder:
     # deployment.
     #
     # The given key in each secret is mounted at
-    # `/etc/ssl/certs/{secret_name}.crt`.
+    # `/etc/ssl/certs/{secret_name}.{extension|".crt"}`.
     secrets:
       []
       # - name: "my-ca-bundle"
       #   key: "ca-bundle.crt"
+      #   extension: "crt"       # optional: defaults to "crt"
 
   # coder.affinity -- Allows specifying an affinity rule for the deployment.
   affinity:

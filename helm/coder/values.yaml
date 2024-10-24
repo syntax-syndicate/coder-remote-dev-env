@@ -207,7 +207,7 @@ coder:
     #   cpu: 2000m
     #   memory: 4096Mi
 
-  # coder.certs -- CA bundles to mount inside the Coder pod.
+  # coder.certs -- CA bundles to mount inside the Coder pod as .crt files.
   certs:
     # coder.certs.secrets -- A list of CA bundle secrets to mount into the Coder
     # pod. The secrets should exist in the same namespace as the Helm
@@ -219,6 +219,20 @@ coder:
       []
       # - name: "my-ca-bundle"
       #   key: "ca-bundle.crt"
+
+  # coder.caPEMFiles -- CA bundles to mount inside the Coder pod as .pem files.
+  caPEMFiles:
+    # coder.caPEMFiles.secrets -- A list of CA bundle secrets to mount into the Coder
+    # pod. The secrets should exist in the same namespace as the Helm
+    # deployment.
+    #
+    # The given key in each secret is mounted at
+    # `/etc/ssl/certs/{secret_name}.{extension|".crt"}`.
+    secrets:
+      []
+      # - name: "my-ca-bundle"
+      #   key: "ca-bundle.pem"
+      #   extension: "crt"       # optional: defaults to "crt"
 
   # coder.affinity -- Allows specifying an affinity rule for the `coder` deployment.
   # The default rule prefers to schedule coder pods on different

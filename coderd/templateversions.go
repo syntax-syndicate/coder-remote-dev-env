@@ -34,6 +34,7 @@ import (
 	"github.com/coder/coder/v2/examples"
 	"github.com/coder/coder/v2/provisionersdk"
 	sdkproto "github.com/coder/coder/v2/provisionersdk/proto"
+	"github.com/coder/coder/v2/provisionersdk/workspacetags"
 )
 
 // @Summary Get template version by ID
@@ -1341,11 +1342,6 @@ func (api *API) postTemplateVersionsByOrganization(rw http.ResponseWriter, r *ht
 		}
 	}
 
-	// Ensures the "owner" is properly applied.
-	// TODO(Cian): We need to detect workspace_tags defined in the file and add
-	// them here.
-	tags := provisionersdk.MutateTags(apiKey.UserID, req.ProvisionerTags)
-
 	if req.ExampleID != "" && req.FileID != uuid.Nil {
 		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
 			Message: "You cannot specify both an example_id and a file_id.",
@@ -1465,6 +1461,21 @@ func (api *API) postTemplateVersionsByOrganization(rw http.ResponseWriter, r *ht
 			return err
 		}
 
+		// Get provisioner tags from the uploaded file and merge them with the user-specified
+		// tags in the request body. Tags specified in the request will override the default
+		// values for any workspace tags defined in the file.
+		fileTags, err := workspacetags.DefaultsFromFile(ctx, api.Logger, file.Data, file.Mimetype)
+		if err != nil {
+			httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+				Message: "Internal error creating template version.",
+				Detail:  xerrors.Errorf("detect tags from template file: %w", err).Error(),
+			})
+			return err
+		}
+		// Ensures the "owner" is properly applied.
+		tags := provisionersdk.MutateTags(apiKey.UserID, req.ProvisionerTags, fileTags)
+		api.Logger.Debug(ctx, "provisioner job tags", slog.F("req", req.ProvisionerTags), slog.F("file", fileTags), slog.F("merged", tags))
+
 		provisionerJob, err = tx.InsertProvisionerJob(ctx, database.InsertProvisionerJobParams{
 			ID:             jobID,
 			CreatedAt:      dbtime.Now(),
@@ -1476,7 +1487,7 @@ func (api *API) postTemplateVersionsByOrganization(rw http.ResponseWriter, r *ht
 			FileID:         file.ID,
 			Type:           database.ProvisionerJobTypeTemplateVersionImport,
 			Input:          jobInput,
-			Tags:           tags, // TODO(Cian): this needs to include workspace_tags defined in the file.
+			Tags:           tags,
 			TraceMetadata: pqtype.NullRawMessage{
 				Valid:      true,
 				RawMessage: traceMetadataRaw,

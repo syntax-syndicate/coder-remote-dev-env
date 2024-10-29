@@ -302,7 +302,10 @@ func (s *ServerTailnet) reinitCoordinator() {
 		agentConn, err := s.getMultiAgent(s.ctx)
 		if err != nil {
 			s.nodesMu.Unlock()
-			s.logger.Error(s.ctx, "reinit multi agent", slog.Error(err))
+			// This can happen if the context cancels. It doesn't seem to be expored by drpc.
+			if errors.Is(err, errors.New("session shutdown")) {
+				s.logger.Error(s.ctx, "reinit multi agent", slog.Error(err))
+			}
 			continue
 		}
 		s.agentConn.Store(&agentConn)

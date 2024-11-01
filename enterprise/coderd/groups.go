@@ -448,13 +448,13 @@ func (api *API) groups(rw http.ResponseWriter, r *http.Request) {
 	})
 
 	// has_member selector can be a user ID or username
-	filter.HasMemberID = parser.UUIDorName(r.URL.Query(), uuid.Nil, "has_member", func(username string) (uuid.UUID, error) {
+	filter.HasMemberID = parser.UUIDorName(r.URL.Query(), uuid.Nil, "has_member", func(userIdent string) (uuid.UUID, error) {
 		user, err := api.Database.GetUserByEmailOrUsername(ctx, database.GetUserByEmailOrUsernameParams{
-			Username: username,
-			Email:    "",
+			Username: userIdent,
+			Email:    userIdent,
 		})
 		if err != nil {
-			return uuid.Nil, xerrors.Errorf("user %q not found", username)
+			return uuid.Nil, xerrors.Errorf("user %q not found", userIdent)
 		}
 		return user.ID, nil
 	})

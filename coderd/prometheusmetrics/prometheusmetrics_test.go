@@ -13,12 +13,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	promClient "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"tailscale.com/tailcfg"
 
 	"cdr.dev/slog"
 	"cdr.dev/slog/sloggers/slogtest"
+
+	"github.com/coder/quartz"
 
 	agentproto "github.com/coder/coder/v2/agent/proto"
 	"github.com/coder/coder/v2/coderd/agentmetrics"
@@ -38,7 +41,6 @@ import (
 	"github.com/coder/coder/v2/tailnet"
 	"github.com/coder/coder/v2/tailnet/tailnettest"
 	"github.com/coder/coder/v2/testutil"
-	"github.com/coder/quartz"
 )
 
 func TestActiveUsers(t *testing.T) {
@@ -518,11 +520,10 @@ func TestAgentStats(t *testing.T) {
 	defer agent2.DRPCConn().Close()
 	defer agent3.DRPCConn().Close()
 
-	registry := prometheus.NewRegistry()
-
 	// given
+	const workspaceCount = 3
 	var i int64
-	for i = 0; i < 3; i++ {
+	for i = 0; i < workspaceCount; i++ {
 		_, err = agent1.UpdateStats(ctx, &agentproto.UpdateStatsRequest{
 			Stats: &agentproto.Stats{
 				TxBytes: 1 + i, RxBytes: 2 + i,
@@ -559,58 +560,96 @@ func TestAgentStats(t *testing.T) {
 	// to be posted after this.
 	closeBatcher()
 
-	// when
-	//
-	// Set initialCreateAfter to some time in the past, so that AgentStats would include all above PostStats,
-	// and it doesn't depend on the real time.
-	closeFunc, err := prometheusmetrics.AgentStats(ctx, slogtest.Make(t, &slogtest.Options{
-		IgnoreErrors: true,
-	}), registry, db, time.Now().Add(-time.Minute), time.Millisecond, agentmetrics.LabelAll, false)
-	require.NoError(t, err)
-	t.Cleanup(closeFunc)
+	tests := []struct {
+		name              string
+		aggregateByLabels []string
+		goldenFile        string
+		metricKeyFn       func(metric *promClient.MetricFamily, sample *promClient.Metric) string
+	}{
+		{
+			name:              "unaggregated",
+			aggregateByLabels: agentmetrics.LabelAll,
+			goldenFile:        "testdata/agent-stats.json",
+			metricKeyFn: func(metric *promClient.MetricFamily, sample *promClient.Metric) string {
+				return fmt.Sprintf("%s:%s:%s:%s", sample.Label[1].GetValue(), sample.Label[2].GetValue(), sample.Label[0].GetValue(), metric.GetName())
+			},
+		},
+		{
+			name:              "single label aggregation",
+			aggregateByLabels: []string{agentmetrics.LabelUsername},
+			goldenFile:        "testdata/agent-stats-aggregated.json",
+			metricKeyFn: func(metric *promClient.MetricFamily, sample *promClient.Metric) string {
+				return fmt.Sprintf("%s:%s", sample.Label[0].GetValue(), metric.GetName())
+			},
+		},
+	}
 
-	// then
-	goldenFile, err := os.ReadFile("testdata/agent-stats.json")
-	require.NoError(t, err)
-	golden := map[string]int{}
-	err = json.Unmarshal(goldenFile, &golden)
-	require.NoError(t, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	collected := map[string]int{}
-	var executionSeconds bool
-	assert.Eventually(t, func() bool {
-		metrics, err := registry.Gather()
-		assert.NoError(t, err)
+			// when
+			//
+			// Set initialCreateAfter to some time in the past, so that AgentStats would include all above PostStats,
+			// and it doesn't depend on the real time.
+			registry := prometheus.NewRegistry()
+			closeFunc, err := prometheusmetrics.AgentStats(ctx, slogtest.Make(t, &slogtest.Options{
+				IgnoreErrors: true,
+			}), registry, db, time.Now().Add(-time.Minute), time.Millisecond, tc.aggregateByLabels, false) // TODO: make conditional on ExperimentWorkspaceUsage like in server.go?
+			require.NoError(t, err)
+			t.Cleanup(closeFunc)
 
-		if len(metrics) < 1 {
-			return false
-		}
+			// then
+			goldenFile, err := os.ReadFile(tc.goldenFile)
+			require.NoError(t, err)
+			golden := map[string]float64{}
+			err = json.Unmarshal(goldenFile, &golden)
+			require.NoError(t, err)
 
-		for _, metric := range metrics {
-			switch metric.GetName() {
-			case "coderd_prometheusmetrics_agentstats_execution_seconds":
-				executionSeconds = true
-			case "coderd_agentstats_connection_count",
-				"coderd_agentstats_connection_median_latency_seconds",
-				"coderd_agentstats_rx_bytes",
-				"coderd_agentstats_tx_bytes",
-				"coderd_agentstats_session_count_jetbrains",
-				"coderd_agentstats_session_count_reconnecting_pty",
-				"coderd_agentstats_session_count_ssh",
-				"coderd_agentstats_session_count_vscode":
-				for _, m := range metric.Metric {
-					// username:workspace:agent:metric = value
-					collected[m.Label[1].GetValue()+":"+m.Label[2].GetValue()+":"+m.Label[0].GetValue()+":"+metric.GetName()] = int(m.Gauge.GetValue())
+			collected := map[string]float64{}
+			// sampleCount := map[string]int{}
+			var executionSeconds bool
+			assert.Eventually(t, func() bool {
+				metrics, err := registry.Gather()
+				assert.NoError(t, err)
+
+				if len(metrics) < 1 {
+					return false
 				}
-			default:
-				require.FailNowf(t, "unexpected metric collected", "metric: %s", metric.GetName())
-			}
-		}
-		return executionSeconds && reflect.DeepEqual(golden, collected)
-	}, testutil.WaitShort, testutil.IntervalFast)
 
-	// Keep this assertion, so that "go test" can print differences instead of "Condition never satisfied"
-	assert.EqualValues(t, golden, collected)
+				for _, metric := range metrics {
+					switch metric.GetName() {
+					// This metric is not aggregated, but we need to validate we saw it, at least.
+					case "coderd_prometheusmetrics_agentstats_execution_seconds":
+						executionSeconds = true
+					case "coderd_agentstats_connection_count",
+						"coderd_agentstats_connection_median_latency_seconds",
+						"coderd_agentstats_rx_bytes",
+						"coderd_agentstats_tx_bytes",
+						"coderd_agentstats_session_count_jetbrains",
+						"coderd_agentstats_session_count_reconnecting_pty",
+						"coderd_agentstats_session_count_ssh",
+						"coderd_agentstats_session_count_vscode":
+						for _, sample := range metric.Metric {
+							key := tc.metricKeyFn(metric, sample)
+							collected[key] = sample.Gauge.GetValue()
+							// if _, ok := sampleCount[key]; !ok {
+							// 	sampleCount[key] = 0
+							// }
+							// sampleCount[key]++
+						}
+					default:
+						require.FailNowf(t, "unexpected metric collected", "metric: %s", metric.GetName())
+					}
+				}
+
+				return executionSeconds && reflect.DeepEqual(golden, collected)
+			}, testutil.WaitShort, testutil.IntervalFast)
+
+			// Keep this assertion, so that "go test" can print differences instead of "Condition never satisfied"
+			assert.EqualValues(t, golden, collected)
+		})
+	}
 }
 
 func TestExperimentsMetric(t *testing.T) {

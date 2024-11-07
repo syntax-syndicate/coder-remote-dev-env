@@ -1,0 +1,10 @@
+{
+  "testuser:coderd_agentstats_connection_count": 30,
+  "testuser:coderd_agentstats_connection_median_latency_seconds": 10,
+  "testuser:coderd_agentstats_rx_bytes": 45,
+  "testuser:coderd_agentstats_session_count_jetbrains": 32,
+  "testuser:coderd_agentstats_session_count_reconnecting_pty": 37,
+  "testuser:coderd_agentstats_session_count_ssh": 42,
+  "testuser:coderd_agentstats_session_count_vscode": 27,
+  "testuser:coderd_agentstats_tx_bytes": 27
+}

@@ -592,6 +592,18 @@ func AgentStats(ctx context.Context, logger slog.Logger, registerer prometheus.R
 			if err != nil {
 				logger.Error(ctx, "can't get agent stats", slog.Error(err))
 			} else {
+				aggr := map[string][]float64{}
+				assoc := map[string]*CachedGaugeVec{
+					"rx_bytes":             agentStatsRxBytesGauge,
+					"tx_bytes":             agentStatsTxBytesGauge,
+					"median_latency_ms":    agentStatsConnectionMedianLatencyGauge,
+					"conn_count":           agentStatsConnectionCountGauge,
+					"session_count_jb":     agentStatsSessionCountJetBrainsGauge,
+					"session_count_pty":    agentStatsSessionCountReconnectingPTYGauge,
+					"session_count_ssh":    agentStatsSessionCountSSHGauge,
+					"session_count_vscode": agentStatsSessionCountVSCodeGauge,
+				}
+
 				for _, agentStat := range stats {
 					var labelValues []string
 					for _, label := range aggregateByLabels {
@@ -605,29 +617,64 @@ func AgentStats(ctx context.Context, logger slog.Logger, registerer prometheus.R
 						}
 					}
 
-					agentStatsRxBytesGauge.WithLabelValues(VectorOperationAdd, float64(agentStat.RxBytes), labelValues...)
-					agentStatsTxBytesGauge.WithLabelValues(VectorOperationAdd, float64(agentStat.TxBytes), labelValues...)
+					metricsMap := map[string]float64{
+						"rx_bytes":             float64(agentStat.RxBytes),
+						"tx_bytes":             float64(agentStat.TxBytes),
+						"median_latency_ms":    agentStat.ConnectionMedianLatencyMS,
+						"conn_count":           float64(agentStat.ConnectionCount),
+						"session_count_jb":     float64(agentStat.SessionCountJetBrains),
+						"session_count_pty":    float64(agentStat.SessionCountReconnectingPTY),
+						"session_count_ssh":    float64(agentStat.SessionCountSSH),
+						"session_count_vscode": float64(agentStat.SessionCountVSCode),
+					}
 
-					agentStatsConnectionCountGauge.WithLabelValues(VectorOperationSet, float64(agentStat.ConnectionCount), labelValues...)
-					agentStatsConnectionMedianLatencyGauge.WithLabelValues(VectorOperationSet, agentStat.ConnectionMedianLatencyMS/1000.0 /* (to seconds) */, labelValues...)
+					for m, v := range metricsMap {
+						key := fmt.Sprintf("%s:%s", m, strings.Join(labelValues, ","))
+						if _, ok := aggr[key]; !ok {
+							aggr[key] = []float64{}
+						}
 
-					agentStatsSessionCountJetBrainsGauge.WithLabelValues(VectorOperationSet, float64(agentStat.SessionCountJetBrains), labelValues...)
-					agentStatsSessionCountReconnectingPTYGauge.WithLabelValues(VectorOperationSet, float64(agentStat.SessionCountReconnectingPTY), labelValues...)
-					agentStatsSessionCountSSHGauge.WithLabelValues(VectorOperationSet, float64(agentStat.SessionCountSSH), labelValues...)
-					agentStatsSessionCountVSCodeGauge.WithLabelValues(VectorOperationSet, float64(agentStat.SessionCountVSCode), labelValues...)
+						aggr[key] = append(aggr[key], v)
+					}
 				}
 
 				if len(stats) > 0 {
-					agentStatsRxBytesGauge.Commit()
-					agentStatsTxBytesGauge.Commit()
+					for k, values := range aggr {
+						name, labels, found := strings.Cut(k, ":")
+						if !found {
+							// TODO error
+							panic("oops 1")
+						}
 
-					agentStatsConnectionCountGauge.Commit()
-					agentStatsConnectionMedianLatencyGauge.Commit()
+						metric, ok := assoc[name]
+						if !ok {
+							// TODO error
+							panic("oops 2")
+						}
 
-					agentStatsSessionCountJetBrainsGauge.Commit()
-					agentStatsSessionCountReconnectingPTYGauge.Commit()
-					agentStatsSessionCountSSHGauge.Commit()
-					agentStatsSessionCountVSCodeGauge.Commit()
+						var value float64
+						for _, v := range values {
+							value += v
+						}
+
+						// special-case handling for this metric
+						if name == "median_latency_ms" {
+							value = value /
+								1000 / // convert to seconds
+								float64(len(values)) // average over all samples
+						}
+
+						operation := VectorOperationSet
+						if name == "rx_bytes" || name == "tx_bytes" {
+							operation = VectorOperationAdd
+						}
+
+						metric.WithLabelValues(operation, value, strings.Split(labels, ",")...)
+					}
+
+					for _, metric := range assoc {
+						metric.Commit()
+					}
 				}
 			}
 

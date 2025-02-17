@@ -10,21 +10,22 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import type { AssignableRoles, Role } from "api/typesGenerated";
+import { Button as ShadcnButton } from "components/Button/Button";
 import { ChooseOne, Cond } from "components/Conditionals/ChooseOne";
-import { EmptyState } from "components/EmptyState/EmptyState";
 import {
-	MoreMenu,
-	MoreMenuContent,
-	MoreMenuItem,
-	MoreMenuTrigger,
-	ThreeDotsButton,
-} from "components/MoreMenu/MoreMenu";
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "components/DropdownMenu/DropdownMenu";
+import { EmptyState } from "components/EmptyState/EmptyState";
 import { Paywall } from "components/Paywall/Paywall";
 import { Stack } from "components/Stack/Stack";
 import {
 	TableLoaderSkeleton,
 	TableRowSkeleton,
 } from "components/TableLoader/TableLoader";
+import { EllipsisVertical } from "lucide-react";
 import type { FC } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { docs } from "utils/docs";
@@ -194,25 +195,27 @@ const RoleRow: FC<RoleRowProps> = ({ role, onDelete, canAssignOrgRole }) => {
 
 			<TableCell>
 				{!role.built_in && (
-					<MoreMenu>
-						<MoreMenuTrigger>
-							<ThreeDotsButton />
-						</MoreMenuTrigger>
-						<MoreMenuContent>
-							<MoreMenuItem
-								onClick={() => {
-									navigate(role.name);
-								}}
-							>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<ShadcnButton size="icon" variant="subtle" aria-label="Open menu">
+								<EllipsisVertical className="size-icon-md" aria-hidden="true" />
+								<span className="sr-only">Open menu</span>
+							</ShadcnButton>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem onClick={() => navigate(role.name)}>
 								Edit
-							</MoreMenuItem>
+							</DropdownMenuItem>
 							{canAssignOrgRole && (
-								<MoreMenuItem danger onClick={onDelete}>
+								<DropdownMenuItem
+									className="text-content-destructive focus:text-content-destructive"
+									onClick={onDelete}
+								>
 									Delete&hellip;
-								</MoreMenuItem>
+								</DropdownMenuItem>
 							)}
-						</MoreMenuContent>
-					</MoreMenu>
+						</DropdownMenuContent>
+					</DropdownMenu>
 				)}
 			</TableCell>
 		</TableRow>

@@ -9,7 +9,7 @@ module.exports = {
 	theme: {
 		extend: {
 			size: {
-				"icon-lg": "1.5rem",
+				"icon-md": "1.5rem",
 				"icon-sm": "1.125rem",
 				"icon-xs": "0.875rem",
 			},

@@ -10,14 +10,14 @@ import type {
 import { ErrorAlert } from "components/Alert/ErrorAlert";
 import { Avatar } from "components/Avatar/Avatar";
 import { AvatarData } from "components/Avatar/AvatarData";
-import { displayError, displaySuccess } from "components/GlobalSnackbar/utils";
+import { Button } from "components/Button/Button";
 import {
-	MoreMenu,
-	MoreMenuContent,
-	MoreMenuItem,
-	MoreMenuTrigger,
-	ThreeDotsButton,
-} from "components/MoreMenu/MoreMenu";
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "components/DropdownMenu/DropdownMenu";
+import { displayError, displaySuccess } from "components/GlobalSnackbar/utils";
 import { SettingsHeader } from "components/SettingsHeader/SettingsHeader";
 import { Stack } from "components/Stack/Stack";
 import {
@@ -28,6 +28,7 @@ import {
 	TableRow,
 } from "components/Table/Table";
 import { UserAutocomplete } from "components/UserAutocomplete/UserAutocomplete";
+import { EllipsisVertical } from "lucide-react";
 import { UserGroupsCell } from "pages/UsersPage/UsersTable/UserGroupsCell";
 import { type FC, useState } from "react";
 import { TableColumnHelpTooltip } from "./UserTable/TableColumnHelpTooltip";
@@ -134,19 +135,29 @@ export const OrganizationMembersPageView: FC<
 								<UserGroupsCell userGroups={member.groups} />
 								<TableCell>
 									{member.user_id !== me.id && canEditMembers && (
-										<MoreMenu>
-											<MoreMenuTrigger>
-												<ThreeDotsButton />
-											</MoreMenuTrigger>
-											<MoreMenuContent>
-												<MoreMenuItem
-													danger
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<Button
+													size="icon"
+													variant="subtle"
+													aria-label="Open menu"
+												>
+													<EllipsisVertical
+														className="size-icon-md"
+														aria-hidden="true"
+													/>
+													<span className="sr-only">Open menu</span>
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end">
+												<DropdownMenuItem
+													className="text-content-destructive focus:text-content-destructive"
 													onClick={() => removeMember(member)}
 												>
 													Remove
-												</MoreMenuItem>
-											</MoreMenuContent>
-										</MoreMenu>
+												</DropdownMenuItem>
+											</DropdownMenuContent>
+										</DropdownMenu>
 									)}
 								</TableCell>
 							</TableRow>

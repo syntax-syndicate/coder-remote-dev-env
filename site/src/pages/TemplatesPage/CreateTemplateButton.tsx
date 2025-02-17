@@ -2,13 +2,13 @@ import AddIcon from "@mui/icons-material/AddOutlined";
 import Inventory2 from "@mui/icons-material/Inventory2";
 import NoteAddOutlined from "@mui/icons-material/NoteAddOutlined";
 import UploadOutlined from "@mui/icons-material/UploadOutlined";
-import Button from "@mui/material/Button";
+import { Button } from "components/Button/Button";
 import {
-	MoreMenu,
-	MoreMenuContent,
-	MoreMenuItem,
-	MoreMenuTrigger,
-} from "components/MoreMenu/MoreMenu";
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "components/DropdownMenu/DropdownMenu";
 import type { FC } from "react";
 
 type CreateTemplateButtonProps = {
@@ -19,38 +19,29 @@ export const CreateTemplateButton: FC<CreateTemplateButtonProps> = ({
 	onNavigate,
 }) => {
 	return (
-		<MoreMenu>
-			<MoreMenuTrigger>
-				<Button startIcon={<AddIcon />} variant="contained">
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button>
+					<AddIcon />
 					Create Template
 				</Button>
-			</MoreMenuTrigger>
-			<MoreMenuContent>
-				<MoreMenuItem
-					onClick={() => {
-						onNavigate("/templates/new?exampleId=scratch");
-					}}
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem
+					onClick={() => onNavigate("/templates/new?exampleId=scratch")}
 				>
 					<NoteAddOutlined />
 					From scratch
-				</MoreMenuItem>
-				<MoreMenuItem
-					onClick={() => {
-						onNavigate("/templates/new");
-					}}
-				>
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => onNavigate("/templates/new")}>
 					<UploadOutlined />
 					Upload template
-				</MoreMenuItem>
-				<MoreMenuItem
-					onClick={() => {
-						onNavigate("/starter-templates");
-					}}
-				>
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={() => onNavigate("/starter-templates")}>
 					<Inventory2 />
 					Choose a starter template
-				</MoreMenuItem>
-			</MoreMenuContent>
-		</MoreMenu>
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 };

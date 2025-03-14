@@ -35,13 +35,24 @@ func (r *RootCmd) open() *serpent.Command {
 	return cmd
 }
 
+type ideConfig struct {
+	scheme        string
+	host          string
+	path          string
+	displayName   string
+	dirParamName  string
+	generateToken bool
+	testOpenError bool
+}
+
 const (
 	vscodeDesktopName = "VS Code Desktop"
 	// IDE specific protocol handlers
-	fleetProtocol   = "fleet"
-	cursorProtocol  = "cursor"
-	zedProtocol     = "zed"
-	windsurfProtocol = "windsurf"
+	vsCodeScheme   = "vscode"
+	fleetScheme    = "fleet"
+	cursorScheme   = "cursor"
+	zedScheme      = "zed"
+	windsurfScheme = "windsurf"
 )
 
 func (r *RootCmd) openVSCode() *serpent.Command {
@@ -62,141 +73,17 @@ func (r *RootCmd) openVSCode() *serpent.Command {
 			initAppearance(client, &appearanceConfig),
 		),
 		Handler: func(inv *serpent.Invocation) error {
-			ctx, cancel := context.WithCancel(inv.Context())
-			defer cancel()
-
-			// Check if we're inside a workspace, and especially inside _this_
-			// workspace so we can perform path resolution/expansion. Generally,
-			// we know that if we're inside a workspace, `open` can't be used.
-			insideAWorkspace := inv.Environ.Get("CODER") == "true"
-			inWorkspaceName := inv.Environ.Get("CODER_WORKSPACE_NAME") + "." + inv.Environ.Get("CODER_WORKSPACE_AGENT_NAME")
-
-			// We need a started workspace to figure out e.g. expanded directory.
-			// Pehraps the vscode-coder extension could handle this by accepting
-			// default_directory=true, then probing the agent. Then we wouldn't
-			// need to wait for the agent to start.
-			workspaceQuery := inv.Args[0]
-			autostart := true
-			workspace, workspaceAgent, err := getWorkspaceAndAgent(ctx, inv, client, autostart, workspaceQuery)
-			if err != nil {
-				return xerrors.Errorf("get workspace and agent: %w", err)
+			config := ideConfig{
+				scheme:        vsCodeScheme,
+				host:          "coder.coder-remote",
+				path:          "/open",
+				displayName:   vscodeDesktopName,
+				dirParamName:  "folder",
+				generateToken: generateToken,
+				testOpenError: testOpenError,
 			}
-
-			workspaceName := workspace.Name + "." + workspaceAgent.Name
-			insideThisWorkspace := insideAWorkspace && inWorkspaceName == workspaceName
-
-			if !insideThisWorkspace {
-				// Wait for the agent to connect, we don't care about readiness
-				// otherwise (e.g. wait).
-				err = cliui.Agent(ctx, inv.Stderr, workspaceAgent.ID, cliui.AgentOptions{
-					Fetch:     client.WorkspaceAgent,
-					FetchLogs: nil,
-					Wait:      false,
-					DocsURL:   appearanceConfig.DocsURL,
-				})
-				if err != nil {
-					if xerrors.Is(err, context.Canceled) {
-						return cliui.Canceled
-					}
-					return xerrors.Errorf("agent: %w", err)
-				}
-
-				// The agent will report it's expanded directory before leaving
-				// the created state, so we need to wait for that to happen.
-				// However, if no directory is set, the expanded directory will
-				// not be set either.
-				if workspaceAgent.Directory != "" {
-					workspace, workspaceAgent, err = waitForAgentCond(ctx, client, workspace, workspaceAgent, func(a codersdk.WorkspaceAgent) bool {
-						return workspaceAgent.LifecycleState != codersdk.WorkspaceAgentLifecycleCreated
-					})
-					if err != nil {
-						return xerrors.Errorf("wait for agent: %w", err)
-					}
-				}
-			}
-
-			var directory string
-			if len(inv.Args) > 1 {
-				directory = inv.Args[1]
-			}
-			directory, err = resolveAgentAbsPath(workspaceAgent.ExpandedDirectory, directory, workspaceAgent.OperatingSystem, insideThisWorkspace)
-			if err != nil {
-				return xerrors.Errorf("resolve agent path: %w", err)
-			}
-
-			u := &url.URL{
-				Scheme: "vscode",
-				Host:   "coder.coder-remote",
-				Path:   "/open",
-			}
-
-			qp := url.Values{}
-
-			qp.Add("url", client.URL.String())
-			qp.Add("owner", workspace.OwnerName)
-			qp.Add("workspace", workspace.Name)
-			qp.Add("agent", workspaceAgent.Name)
-			if directory != "" {
-				qp.Add("folder", directory)
-			}
-
-			// We always set the token if we believe we can open without
-			// printing the URI, otherwise the token must be explicitly
-			// requested as it will be printed in plain text.
-			if !insideAWorkspace || generateToken {
-				// Prepare an API key. This is for automagical configuration of
-				// VS Code, however, if running on a local machine we could try
-				// to probe VS Code settings to see if the current configuration
-				// is valid. Future improvement idea.
-				apiKey, err := client.CreateAPIKey(ctx, codersdk.Me)
-				if err != nil {
-					return xerrors.Errorf("create API key: %w", err)
-				}
-				qp.Add("token", apiKey.Key)
-			}
-
-			u.RawQuery = qp.Encode()
-
-			openingPath := workspaceName
-			if directory != "" {
-				openingPath += ":" + directory
-			}
-
-			if insideAWorkspace {
-				_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s is not supported inside a workspace, please open the following URI on your local machine instead:\n\n", openingPath, vscodeDesktopName)
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", u.String())
-				return nil
-			}
-			_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s\n", openingPath, vscodeDesktopName)
-
-			if !testOpenError {
-				err = open.Run(u.String())
-			} else {
-				err = xerrors.New("test.open-error")
-			}
-			if err != nil {
-				if !generateToken {
-					// This is not an important step, so we don't want
-					// to block the user here.
-					token := qp.Get("token")
-					wait := doAsync(func() {
-						// Best effort, we don't care if this fails.
-						apiKeyID := strings.SplitN(token, "-", 2)[0]
-						_ = client.DeleteAPIKey(ctx, codersdk.Me, apiKeyID)
-					})
-					defer wait()
-
-					qp.Del("token")
-					u.RawQuery = qp.Encode()
-				}
-
-				_, _ = fmt.Fprintf(inv.Stderr, "Could not automatically open %s in %s: %s\n", openingPath, vscodeDesktopName, err)
-				_, _ = fmt.Fprintf(inv.Stderr, "Please open the following URI instead:\n\n")
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", u.String())
-				return nil
-			}
-
-			return nil
+			
+			return r.openIDEHandler(inv, client, config, appearanceConfig)
 		},
 	}
 
@@ -215,7 +102,7 @@ func (r *RootCmd) openVSCode() *serpent.Command {
 			Flag:        "test.open-error",
 			Description: "Don't run the open command.",
 			Value:       serpent.BoolOf(&testOpenError),
-			Hidden:      true, // This is for testing!
+			Hidden:      true, // This is for testing\!
 		},
 	}
 
@@ -233,13 +120,13 @@ func waitForAgentCond(ctx context.Context, client *codersdk.Client, workspace co
 	}
 
 	wc, err := client.WatchWorkspace(ctx, workspace.ID)
-	if err != nil {
+	if err \!= nil {
 		return workspace, workspaceAgent, xerrors.Errorf("watch workspace: %w", err)
 	}
 
 	for workspace = range wc {
 		workspaceAgent, err = getWorkspaceAgent(workspace, workspaceAgent.Name)
-		if err != nil {
+		if err \!= nil {
 			return workspace, workspaceAgent, xerrors.Errorf("get workspace agent: %w", err)
 		}
 		if cond(workspaceAgent) {
@@ -312,7 +199,7 @@ func resolveAgentAbsPath(workingDirectory, relOrAbsPath, agentOS string, local b
 
 	case local:
 		p, err := filepath.Abs(relOrAbsPath)
-		if err != nil {
+		if err \!= nil {
 			return "", xerrors.Errorf("expand path: %w", err)
 		}
 		return p, nil
@@ -320,7 +207,7 @@ func resolveAgentAbsPath(workingDirectory, relOrAbsPath, agentOS string, local b
 	case agentOS == "windows":
 		relOrAbsPath = unixToWindowsPath(relOrAbsPath)
 		switch {
-		case workingDirectory != "" && !isWindowsAbsPath(relOrAbsPath):
+		case workingDirectory \!= "" && \!isWindowsAbsPath(relOrAbsPath):
 			return windowsJoinPath(workingDirectory, relOrAbsPath), nil
 		case isWindowsAbsPath(relOrAbsPath):
 			return relOrAbsPath, nil
@@ -329,7 +216,7 @@ func resolveAgentAbsPath(workingDirectory, relOrAbsPath, agentOS string, local b
 		}
 
 	// Note that we use `path` instead of `filepath` since we want Unix behavior.
-	case workingDirectory != "" && !path.IsAbs(relOrAbsPath):
+	case workingDirectory \!= "" && \!path.IsAbs(relOrAbsPath):
 		return path.Join(workingDirectory, relOrAbsPath), nil
 	case path.IsAbs(relOrAbsPath):
 		return relOrAbsPath, nil
@@ -348,6 +235,166 @@ func doAsync(f func()) (wait func()) {
 	return func() {
 		<-done
 	}
+}
+
+// openIDEHandler creates a handler function for opening workspaces in various IDEs
+func (r *RootCmd) openIDEHandler(inv *serpent.Invocation, client *codersdk.Client, config ideConfig, appearanceConfig codersdk.AppearanceConfig) error {
+	ctx, cancel := context.WithCancel(inv.Context())
+	defer cancel()
+
+	// Check if we're inside a workspace
+	insideAWorkspace := inv.Environ.Get("CODER") == "true"
+	inWorkspaceName := inv.Environ.Get("CODER_WORKSPACE_NAME") + "." + inv.Environ.Get("CODER_WORKSPACE_AGENT_NAME")
+
+	// Get workspace and agent
+	workspaceQuery := inv.Args[0]
+	autostart := true
+	workspace, workspaceAgent, err := getWorkspaceAndAgent(ctx, inv, client, autostart, workspaceQuery)
+	if err \!= nil {
+		return xerrors.Errorf("get workspace and agent: %w", err)
+	}
+
+	workspaceName := workspace.Name + "." + workspaceAgent.Name
+	insideThisWorkspace := insideAWorkspace && inWorkspaceName == workspaceName
+
+	if \!insideThisWorkspace {
+		// Wait for the agent to connect
+		err = cliui.Agent(ctx, inv.Stderr, workspaceAgent.ID, cliui.AgentOptions{
+			Fetch:     client.WorkspaceAgent,
+			FetchLogs: nil,
+			Wait:      false,
+			DocsURL:   appearanceConfig.DocsURL,
+		})
+		if err \!= nil {
+			if xerrors.Is(err, context.Canceled) {
+				return cliui.Canceled
+			}
+			return xerrors.Errorf("agent: %w", err)
+		}
+
+		if workspaceAgent.Directory \!= "" {
+			workspace, workspaceAgent, err = waitForAgentCond(ctx, client, workspace, workspaceAgent, func(a codersdk.WorkspaceAgent) bool {
+				return workspaceAgent.LifecycleState \!= codersdk.WorkspaceAgentLifecycleCreated
+			})
+			if err \!= nil {
+				return xerrors.Errorf("wait for agent: %w", err)
+			}
+		}
+	}
+
+	// Parse the directory argument if provided
+	var directory string
+	if len(inv.Args) > 1 {
+		directory = inv.Args[1]
+	}
+	directory, err = resolveAgentAbsPath(workspaceAgent.ExpandedDirectory, directory, workspaceAgent.OperatingSystem, insideThisWorkspace)
+	if err \!= nil {
+		return xerrors.Errorf("resolve agent path: %w", err)
+	}
+
+	// Generate the appropriate URL based on the scheme
+	var u *url.URL
+	
+	// Use different URL formats depending on the scheme
+	switch config.scheme {
+	case vsCodeScheme, cursorScheme, windsurfScheme:
+		// VSCode, Cursor, and Windsurf use similar URL formats
+		u = &url.URL{
+			Scheme: config.scheme,
+			Host:   config.host \!= "" ? config.host : "coder.coder-remote",
+			Path:   config.path \!= "" ? config.path : "/open",
+		}
+		
+		qp := url.Values{}
+		qp.Add("url", client.URL.String())
+		qp.Add("owner", workspace.OwnerName)
+		qp.Add("workspace", workspace.Name)
+		qp.Add("agent", workspaceAgent.Name)
+		
+		// Add directory if present - use the appropriate parameter name
+		dirParam := config.dirParamName
+		if dirParam == "" {
+			dirParam = "folder" // Default to folder for VSCode-like schemes
+		}
+		
+		if directory \!= "" {
+			qp.Add(dirParam, directory)
+		}
+		
+		// Add token if needed
+		if \!insideAWorkspace || config.generateToken {
+			apiKey, err := client.CreateAPIKey(ctx, codersdk.Me)
+			if err \!= nil {
+				return xerrors.Errorf("create API key: %w", err)
+			}
+			qp.Add("token", apiKey.Key)
+		}
+		
+		u.RawQuery = qp.Encode()
+		
+	case fleetScheme:
+		// Fleet uses a specific URI format: fleet://fleet.ssh/ssh://username@hostname:22
+		username := "coder"
+		hostname := client.URL.Hostname()
+		
+		u = &url.URL{
+			Scheme: fleetScheme,
+			Host:   "fleet.ssh",
+			Path:   fmt.Sprintf("/ssh://%s@%s:22", username, hostname),
+		}
+		// Fleet doesn't support query parameters, so we don't add them
+		
+	case zedScheme:
+		// Zed uses a simpler format per PR #19970
+		// Format: zed://coder@hostname:22
+		// Reference: https://github.com/zed-industries/zed/pull/19970/files
+		username := "coder"
+		hostname := client.URL.Hostname()
+		
+		u = &url.URL{
+			Scheme: zedScheme,
+			Path:   fmt.Sprintf("//%s@%s:22", username, hostname),
+		}
+		// Zed doesn't support query parameters, so we don't add them
+	}
+
+	openingPath := workspaceName
+	if directory \!= "" {
+		openingPath += ":" + directory
+	}
+
+	if insideAWorkspace {
+		_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s is not supported inside a workspace, please open the following URI on your local machine instead:\n\n", openingPath, config.displayName)
+		_, _ = fmt.Fprintf(inv.Stdout, "%s\n", u.String())
+		return nil
+	}
+	_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s\n", openingPath, config.displayName)
+
+	if \!config.testOpenError {
+		err = open.Run(u.String())
+	} else {
+		err = xerrors.New("test.open-error")
+	}
+	
+	if err \!= nil {
+		// If token was generated, try to clean it up
+		if u.Query().Get("token") \!= "" {
+			token := u.Query().Get("token")
+			wait := doAsync(func() {
+				// Best effort, we don't care if this fails.
+				apiKeyID := strings.SplitN(token, "-", 2)[0]
+				_ = client.DeleteAPIKey(ctx, codersdk.Me, apiKeyID)
+			})
+			defer wait()
+		}
+
+		_, _ = fmt.Fprintf(inv.Stderr, "Could not automatically open %s in %s: %s\n", openingPath, config.displayName, err)
+		_, _ = fmt.Fprintf(inv.Stderr, "Please open the following URI instead:\n\n")
+		_, _ = fmt.Fprintf(inv.Stdout, "%s\n", u.String())
+		return nil
+	}
+
+	return nil
 }
 
 // openWindsurf provides a direct command for opening workspaces in Windsurf
@@ -369,118 +416,17 @@ func (r *RootCmd) openWindsurf() *serpent.Command {
 			initAppearance(client, &appearanceConfig),
 		),
 		Handler: func(inv *serpent.Invocation) error {
-			ctx, cancel := context.WithCancel(inv.Context())
-			defer cancel()
-
-			// Check if we're inside a workspace
-			insideAWorkspace := inv.Environ.Get("CODER") == "true"
-			inWorkspaceName := inv.Environ.Get("CODER_WORKSPACE_NAME") + "." + inv.Environ.Get("CODER_WORKSPACE_AGENT_NAME")
-
-			// Get workspace and agent
-			workspaceQuery := inv.Args[0]
-			autostart := true
-			workspace, workspaceAgent, err := getWorkspaceAndAgent(ctx, inv, client, autostart, workspaceQuery)
-			if err != nil {
-				return xerrors.Errorf("get workspace and agent: %w", err)
+			config := ideConfig{
+				scheme:        windsurfScheme,
+				host:          "coder.coder-remote", // VSCode-like URL format
+				path:          "/open",
+				displayName:   "Windsurf IDE",
+				dirParamName:  "folder", // Using same param name as VSCode
+				generateToken: generateToken,
+				testOpenError: testOpenError,
 			}
-
-			workspaceName := workspace.Name + "." + workspaceAgent.Name
-			insideThisWorkspace := insideAWorkspace && inWorkspaceName == workspaceName
-
-			if !insideThisWorkspace {
-				// Wait for the agent to connect
-				err = cliui.Agent(ctx, inv.Stderr, workspaceAgent.ID, cliui.AgentOptions{
-					Fetch:     client.WorkspaceAgent,
-					FetchLogs: nil,
-					Wait:      false,
-					DocsURL:   appearanceConfig.DocsURL,
-				})
-				if err != nil {
-					if xerrors.Is(err, context.Canceled) {
-						return cliui.Canceled
-					}
-					return xerrors.Errorf("agent: %w", err)
-				}
-
-				if workspaceAgent.Directory != "" {
-					workspace, workspaceAgent, err = waitForAgentCond(ctx, client, workspace, workspaceAgent, func(a codersdk.WorkspaceAgent) bool {
-						return workspaceAgent.LifecycleState != codersdk.WorkspaceAgentLifecycleCreated
-					})
-					if err != nil {
-						return xerrors.Errorf("wait for agent: %w", err)
-					}
-				}
-			}
-
-			// Parse the directory argument if provided
-			var directory string
-			if len(inv.Args) > 1 {
-				directory = inv.Args[1]
-			}
-			directory, err = resolveAgentAbsPath(workspaceAgent.ExpandedDirectory, directory, workspaceAgent.OperatingSystem, insideThisWorkspace)
-			if err != nil {
-				return xerrors.Errorf("resolve agent path: %w", err)
-			}
-
-			// Create the URL for Windsurf
-			url := &url.URL{
-				Scheme: windsurfProtocol,
-				Host:   "open",
-			}
-			qp := url.Values{}
-			qp.Add("url", client.URL.String())
-			qp.Add("workspace", workspace.Name)
-			qp.Add("agent", workspaceAgent.Name)
-			qp.Add("owner", workspace.OwnerName)
-			if directory != "" {
-				qp.Add("dir", directory)
-			}
-			if !insideAWorkspace || generateToken {
-				apiKey, err := client.CreateAPIKey(ctx, codersdk.Me)
-				if err != nil {
-					return xerrors.Errorf("create API key: %w", err)
-				}
-				qp.Add("token", apiKey.Key)
-			}
-			url.RawQuery = qp.Encode()
-
-			appDisplayName := "Windsurf IDE"
-			openingPath := workspaceName
-			if directory != "" {
-				openingPath += ":" + directory
-			}
-
-			if insideAWorkspace {
-				_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s is not supported inside a workspace, please open the following URI on your local machine instead:\n\n", openingPath, appDisplayName)
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-			_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s\n", openingPath, appDisplayName)
-
-			if !testOpenError {
-				err = open.Run(url.String())
-			} else {
-				err = xerrors.New("test.open-error")
-			}
-			if err != nil {
-				// If token was generated, try to clean it up
-				if u, ok := url.Query()["token"]; ok && len(u) > 0 {
-					token := u[0]
-					wait := doAsync(func() {
-						// Best effort, we don't care if this fails.
-						apiKeyID := strings.SplitN(token, "-", 2)[0]
-						_ = client.DeleteAPIKey(ctx, codersdk.Me, apiKeyID)
-					})
-					defer wait()
-				}
-
-				_, _ = fmt.Fprintf(inv.Stderr, "Could not automatically open %s in %s: %s\n", openingPath, appDisplayName, err)
-				_, _ = fmt.Fprintf(inv.Stderr, "Please open the following URI instead:\n\n")
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-
-			return nil
+			
+			return r.openIDEHandler(inv, client, config, appearanceConfig)
 		},
 	}
 
@@ -496,7 +442,7 @@ func (r *RootCmd) openWindsurf() *serpent.Command {
 			Flag:        "test.open-error",
 			Description: "Don't run the open command.",
 			Value:       serpent.BoolOf(&testOpenError),
-			Hidden:      true, // This is for testing!
+			Hidden:      true, // This is for testing\!
 		},
 	}
 
@@ -522,118 +468,15 @@ func (r *RootCmd) openFleet() *serpent.Command {
 			initAppearance(client, &appearanceConfig),
 		),
 		Handler: func(inv *serpent.Invocation) error {
-			ctx, cancel := context.WithCancel(inv.Context())
-			defer cancel()
-
-			// Check if we're inside a workspace
-			insideAWorkspace := inv.Environ.Get("CODER") == "true"
-			inWorkspaceName := inv.Environ.Get("CODER_WORKSPACE_NAME") + "." + inv.Environ.Get("CODER_WORKSPACE_AGENT_NAME")
-
-			// Get workspace and agent
-			workspaceQuery := inv.Args[0]
-			autostart := true
-			workspace, workspaceAgent, err := getWorkspaceAndAgent(ctx, inv, client, autostart, workspaceQuery)
-			if err != nil {
-				return xerrors.Errorf("get workspace and agent: %w", err)
+			config := ideConfig{
+				scheme:        fleetScheme,
+				displayName:   "JetBrains Fleet",
+				dirParamName:  "dir",
+				generateToken: generateToken,
+				testOpenError: testOpenError,
 			}
-
-			workspaceName := workspace.Name + "." + workspaceAgent.Name
-			insideThisWorkspace := insideAWorkspace && inWorkspaceName == workspaceName
-
-			if !insideThisWorkspace {
-				// Wait for the agent to connect
-				err = cliui.Agent(ctx, inv.Stderr, workspaceAgent.ID, cliui.AgentOptions{
-					Fetch:     client.WorkspaceAgent,
-					FetchLogs: nil,
-					Wait:      false,
-					DocsURL:   appearanceConfig.DocsURL,
-				})
-				if err != nil {
-					if xerrors.Is(err, context.Canceled) {
-						return cliui.Canceled
-					}
-					return xerrors.Errorf("agent: %w", err)
-				}
-
-				if workspaceAgent.Directory != "" {
-					workspace, workspaceAgent, err = waitForAgentCond(ctx, client, workspace, workspaceAgent, func(a codersdk.WorkspaceAgent) bool {
-						return workspaceAgent.LifecycleState != codersdk.WorkspaceAgentLifecycleCreated
-					})
-					if err != nil {
-						return xerrors.Errorf("wait for agent: %w", err)
-					}
-				}
-			}
-
-			// Parse the directory argument if provided
-			var directory string
-			if len(inv.Args) > 1 {
-				directory = inv.Args[1]
-			}
-			directory, err = resolveAgentAbsPath(workspaceAgent.ExpandedDirectory, directory, workspaceAgent.OperatingSystem, insideThisWorkspace)
-			if err != nil {
-				return xerrors.Errorf("resolve agent path: %w", err)
-			}
-
-			// Create the URL for Fleet
-			url := &url.URL{
-				Scheme: fleetProtocol,
-				Host:   "open",
-			}
-			qp := url.Values{}
-			qp.Add("url", client.URL.String())
-			qp.Add("workspace", workspace.Name)
-			qp.Add("agent", workspaceAgent.Name)
-			qp.Add("owner", workspace.OwnerName)
-			if directory != "" {
-				qp.Add("dir", directory)
-			}
-			if !insideAWorkspace || generateToken {
-				apiKey, err := client.CreateAPIKey(ctx, codersdk.Me)
-				if err != nil {
-					return xerrors.Errorf("create API key: %w", err)
-				}
-				qp.Add("token", apiKey.Key)
-			}
-			url.RawQuery = qp.Encode()
-
-			appDisplayName := "JetBrains Fleet"
-			openingPath := workspaceName
-			if directory != "" {
-				openingPath += ":" + directory
-			}
-
-			if insideAWorkspace {
-				_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s is not supported inside a workspace, please open the following URI on your local machine instead:\n\n", openingPath, appDisplayName)
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-			_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s\n", openingPath, appDisplayName)
-
-			if !testOpenError {
-				err = open.Run(url.String())
-			} else {
-				err = xerrors.New("test.open-error")
-			}
-			if err != nil {
-				// If token was generated, try to clean it up
-				if u, ok := url.Query()["token"]; ok && len(u) > 0 {
-					token := u[0]
-					wait := doAsync(func() {
-						// Best effort, we don't care if this fails.
-						apiKeyID := strings.SplitN(token, "-", 2)[0]
-						_ = client.DeleteAPIKey(ctx, codersdk.Me, apiKeyID)
-					})
-					defer wait()
-				}
-
-				_, _ = fmt.Fprintf(inv.Stderr, "Could not automatically open %s in %s: %s\n", openingPath, appDisplayName, err)
-				_, _ = fmt.Fprintf(inv.Stderr, "Please open the following URI instead:\n\n")
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-
-			return nil
+			
+			return r.openIDEHandler(inv, client, config, appearanceConfig)
 		},
 	}
 
@@ -649,7 +492,7 @@ func (r *RootCmd) openFleet() *serpent.Command {
 			Flag:        "test.open-error",
 			Description: "Don't run the open command.",
 			Value:       serpent.BoolOf(&testOpenError),
-			Hidden:      true, // This is for testing!
+			Hidden:      true, // This is for testing\!
 		},
 	}
 
@@ -675,118 +518,17 @@ func (r *RootCmd) openCursor() *serpent.Command {
 			initAppearance(client, &appearanceConfig),
 		),
 		Handler: func(inv *serpent.Invocation) error {
-			ctx, cancel := context.WithCancel(inv.Context())
-			defer cancel()
-
-			// Check if we're inside a workspace
-			insideAWorkspace := inv.Environ.Get("CODER") == "true"
-			inWorkspaceName := inv.Environ.Get("CODER_WORKSPACE_NAME") + "." + inv.Environ.Get("CODER_WORKSPACE_AGENT_NAME")
-
-			// Get workspace and agent
-			workspaceQuery := inv.Args[0]
-			autostart := true
-			workspace, workspaceAgent, err := getWorkspaceAndAgent(ctx, inv, client, autostart, workspaceQuery)
-			if err != nil {
-				return xerrors.Errorf("get workspace and agent: %w", err)
+			config := ideConfig{
+				scheme:        cursorScheme,
+				host:          "coder.coder-remote", // VSCode-like URL format
+				path:          "/open",
+				displayName:   "Cursor",
+				dirParamName:  "folder", // Using same param name as VSCode
+				generateToken: generateToken,
+				testOpenError: testOpenError,
 			}
-
-			workspaceName := workspace.Name + "." + workspaceAgent.Name
-			insideThisWorkspace := insideAWorkspace && inWorkspaceName == workspaceName
-
-			if !insideThisWorkspace {
-				// Wait for the agent to connect
-				err = cliui.Agent(ctx, inv.Stderr, workspaceAgent.ID, cliui.AgentOptions{
-					Fetch:     client.WorkspaceAgent,
-					FetchLogs: nil,
-					Wait:      false,
-					DocsURL:   appearanceConfig.DocsURL,
-				})
-				if err != nil {
-					if xerrors.Is(err, context.Canceled) {
-						return cliui.Canceled
-					}
-					return xerrors.Errorf("agent: %w", err)
-				}
-
-				if workspaceAgent.Directory != "" {
-					workspace, workspaceAgent, err = waitForAgentCond(ctx, client, workspace, workspaceAgent, func(a codersdk.WorkspaceAgent) bool {
-						return workspaceAgent.LifecycleState != codersdk.WorkspaceAgentLifecycleCreated
-					})
-					if err != nil {
-						return xerrors.Errorf("wait for agent: %w", err)
-					}
-				}
-			}
-
-			// Parse the directory argument if provided
-			var directory string
-			if len(inv.Args) > 1 {
-				directory = inv.Args[1]
-			}
-			directory, err = resolveAgentAbsPath(workspaceAgent.ExpandedDirectory, directory, workspaceAgent.OperatingSystem, insideThisWorkspace)
-			if err != nil {
-				return xerrors.Errorf("resolve agent path: %w", err)
-			}
-
-			// Create the URL for Cursor
-			url := &url.URL{
-				Scheme: cursorProtocol,
-				Host:   "open",
-			}
-			qp := url.Values{}
-			qp.Add("url", client.URL.String())
-			qp.Add("workspace", workspace.Name)
-			qp.Add("agent", workspaceAgent.Name)
-			qp.Add("owner", workspace.OwnerName)
-			if directory != "" {
-				qp.Add("dir", directory)
-			}
-			if !insideAWorkspace || generateToken {
-				apiKey, err := client.CreateAPIKey(ctx, codersdk.Me)
-				if err != nil {
-					return xerrors.Errorf("create API key: %w", err)
-				}
-				qp.Add("token", apiKey.Key)
-			}
-			url.RawQuery = qp.Encode()
-
-			appDisplayName := "Cursor"
-			openingPath := workspaceName
-			if directory != "" {
-				openingPath += ":" + directory
-			}
-
-			if insideAWorkspace {
-				_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s is not supported inside a workspace, please open the following URI on your local machine instead:\n\n", openingPath, appDisplayName)
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-			_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s\n", openingPath, appDisplayName)
-
-			if !testOpenError {
-				err = open.Run(url.String())
-			} else {
-				err = xerrors.New("test.open-error")
-			}
-			if err != nil {
-				// If token was generated, try to clean it up
-				if u, ok := url.Query()["token"]; ok && len(u) > 0 {
-					token := u[0]
-					wait := doAsync(func() {
-						// Best effort, we don't care if this fails.
-						apiKeyID := strings.SplitN(token, "-", 2)[0]
-						_ = client.DeleteAPIKey(ctx, codersdk.Me, apiKeyID)
-					})
-					defer wait()
-				}
-
-				_, _ = fmt.Fprintf(inv.Stderr, "Could not automatically open %s in %s: %s\n", openingPath, appDisplayName, err)
-				_, _ = fmt.Fprintf(inv.Stderr, "Please open the following URI instead:\n\n")
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-
-			return nil
+			
+			return r.openIDEHandler(inv, client, config, appearanceConfig)
 		},
 	}
 
@@ -802,7 +544,7 @@ func (r *RootCmd) openCursor() *serpent.Command {
 			Flag:        "test.open-error",
 			Description: "Don't run the open command.",
 			Value:       serpent.BoolOf(&testOpenError),
-			Hidden:      true, // This is for testing!
+			Hidden:      true, // This is for testing\!
 		},
 	}
 
@@ -828,118 +570,15 @@ func (r *RootCmd) openZed() *serpent.Command {
 			initAppearance(client, &appearanceConfig),
 		),
 		Handler: func(inv *serpent.Invocation) error {
-			ctx, cancel := context.WithCancel(inv.Context())
-			defer cancel()
-
-			// Check if we're inside a workspace
-			insideAWorkspace := inv.Environ.Get("CODER") == "true"
-			inWorkspaceName := inv.Environ.Get("CODER_WORKSPACE_NAME") + "." + inv.Environ.Get("CODER_WORKSPACE_AGENT_NAME")
-
-			// Get workspace and agent
-			workspaceQuery := inv.Args[0]
-			autostart := true
-			workspace, workspaceAgent, err := getWorkspaceAndAgent(ctx, inv, client, autostart, workspaceQuery)
-			if err != nil {
-				return xerrors.Errorf("get workspace and agent: %w", err)
+			config := ideConfig{
+				scheme:        zedScheme,
+				displayName:   "Zed Editor",
+				dirParamName:  "dir",
+				generateToken: generateToken,
+				testOpenError: testOpenError,
 			}
-
-			workspaceName := workspace.Name + "." + workspaceAgent.Name
-			insideThisWorkspace := insideAWorkspace && inWorkspaceName == workspaceName
-
-			if !insideThisWorkspace {
-				// Wait for the agent to connect
-				err = cliui.Agent(ctx, inv.Stderr, workspaceAgent.ID, cliui.AgentOptions{
-					Fetch:     client.WorkspaceAgent,
-					FetchLogs: nil,
-					Wait:      false,
-					DocsURL:   appearanceConfig.DocsURL,
-				})
-				if err != nil {
-					if xerrors.Is(err, context.Canceled) {
-						return cliui.Canceled
-					}
-					return xerrors.Errorf("agent: %w", err)
-				}
-
-				if workspaceAgent.Directory != "" {
-					workspace, workspaceAgent, err = waitForAgentCond(ctx, client, workspace, workspaceAgent, func(a codersdk.WorkspaceAgent) bool {
-						return workspaceAgent.LifecycleState != codersdk.WorkspaceAgentLifecycleCreated
-					})
-					if err != nil {
-						return xerrors.Errorf("wait for agent: %w", err)
-					}
-				}
-			}
-
-			// Parse the directory argument if provided
-			var directory string
-			if len(inv.Args) > 1 {
-				directory = inv.Args[1]
-			}
-			directory, err = resolveAgentAbsPath(workspaceAgent.ExpandedDirectory, directory, workspaceAgent.OperatingSystem, insideThisWorkspace)
-			if err != nil {
-				return xerrors.Errorf("resolve agent path: %w", err)
-			}
-
-			// Create the URL for Zed
-			url := &url.URL{
-				Scheme: zedProtocol,
-				Host:   "open",
-			}
-			qp := url.Values{}
-			qp.Add("url", client.URL.String())
-			qp.Add("workspace", workspace.Name)
-			qp.Add("agent", workspaceAgent.Name)
-			qp.Add("owner", workspace.OwnerName)
-			if directory != "" {
-				qp.Add("dir", directory)
-			}
-			if !insideAWorkspace || generateToken {
-				apiKey, err := client.CreateAPIKey(ctx, codersdk.Me)
-				if err != nil {
-					return xerrors.Errorf("create API key: %w", err)
-				}
-				qp.Add("token", apiKey.Key)
-			}
-			url.RawQuery = qp.Encode()
-
-			appDisplayName := "Zed Editor"
-			openingPath := workspaceName
-			if directory != "" {
-				openingPath += ":" + directory
-			}
-
-			if insideAWorkspace {
-				_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s is not supported inside a workspace, please open the following URI on your local machine instead:\n\n", openingPath, appDisplayName)
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-			_, _ = fmt.Fprintf(inv.Stderr, "Opening %s in %s\n", openingPath, appDisplayName)
-
-			if !testOpenError {
-				err = open.Run(url.String())
-			} else {
-				err = xerrors.New("test.open-error")
-			}
-			if err != nil {
-				// If token was generated, try to clean it up
-				if u, ok := url.Query()["token"]; ok && len(u) > 0 {
-					token := u[0]
-					wait := doAsync(func() {
-						// Best effort, we don't care if this fails.
-						apiKeyID := strings.SplitN(token, "-", 2)[0]
-						_ = client.DeleteAPIKey(ctx, codersdk.Me, apiKeyID)
-					})
-					defer wait()
-				}
-
-				_, _ = fmt.Fprintf(inv.Stderr, "Could not automatically open %s in %s: %s\n", openingPath, appDisplayName, err)
-				_, _ = fmt.Fprintf(inv.Stderr, "Please open the following URI instead:\n\n")
-				_, _ = fmt.Fprintf(inv.Stdout, "%s\n", url.String())
-				return nil
-			}
-
-			return nil
+			
+			return r.openIDEHandler(inv, client, config, appearanceConfig)
 		},
 	}
 
@@ -955,7 +594,7 @@ func (r *RootCmd) openZed() *serpent.Command {
 			Flag:        "test.open-error",
 			Description: "Don't run the open command.",
 			Value:       serpent.BoolOf(&testOpenError),
-			Hidden:      true, // This is for testing!
+			Hidden:      true, // This is for testing\!
 		},
 	}
 

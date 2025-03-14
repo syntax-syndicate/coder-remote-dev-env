@@ -1,18 +1,22 @@
 package cli_test
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/coder/coder/v2/agent/agenttest"
+	agentproto "github.com/coder/coder/v2/agent/proto"
 	"github.com/coder/coder/v2/cli/clitest"
 	"github.com/coder/coder/v2/coderd/coderdtest"
+	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/provisionersdk/proto"
 	"github.com/coder/coder/v2/pty/ptytest"
@@ -282,4 +286,256 @@ func TestOpenVSCode_NoAgentDirectory(t *testing.T) {
 			w.RequireSuccess()
 		})
 	}
+}
+
+func TestOpenApp(t *testing.T) {
+	t.Parallel()
+
+	agentName := "agent1"
+	client, workspace, agentToken := setupWorkspaceForAgent(t, func(agents []*proto.Agent) []*proto.Agent {
+		agents[0].Name = agentName
+		agents[0].OperatingSystem = runtime.GOOS
+		agents[0].Apps = []*proto.App{
+			{
+				Name:     "Jupyter",
+				Icon:     "/jupyter.svg",
+				Command:  "jupyter notebook",
+				Slug:     "jupyter",
+				External: false,
+				Url:      "http://localhost:8888",
+			},
+			{
+				Name:     "External App",
+				Icon:     "/external.svg",
+				Command:  "",
+				Slug:     "external-app",
+				External: true,
+				Url:      "https://example.com",
+			},
+		}
+		return agents
+	})
+
+	_ = agenttest.New(t, client.URL, agentToken)
+	_ = coderdtest.AwaitWorkspaceAgents(t, client, workspace.ID)
+
+	insideWorkspaceEnv := map[string]string{
+		"CODER":                      "true",
+		"CODER_WORKSPACE_NAME":       workspace.Name,
+		"CODER_WORKSPACE_AGENT_NAME": agentName,
+	}
+
+	absPath := "/home/coder"
+	if runtime.GOOS == "windows" {
+		absPath = "C:\\home\\coder"
+	}
+
+	tests := []struct {
+		name         string
+		args         []string
+		env          map[string]string
+		wantDir      string
+		wantProtocol string
+		wantToken    bool
+		wantError    bool
+	}{
+		{
+			name:      "no args",
+			args:      []string{},
+			wantError: true,
+		},
+		{
+			name:      "nonexistent workspace",
+			args:      []string{"--test.open-error", "jupyter", workspace.Name + "bad"},
+			wantError: true,
+		},
+		{
+			name:         "ok app jupyter",
+			args:         []string{"--test.open-error", "jupyter", workspace.Name},
+			wantProtocol: "http",
+		},
+		{
+			name:         "ok app external",
+			args:         []string{"--test.open-error", "external-app", workspace.Name},
+			wantProtocol: "https",
+		},
+		{
+			name:         "ok app with directory",
+			args:         []string{"--test.open-error", "jupyter", workspace.Name, absPath},
+			wantDir:      absPath,
+			wantProtocol: "http",
+		},
+		{
+			name:         "ok app with token",
+			args:         []string{"--test.open-error", "jupyter", workspace.Name, "--generate-token"},
+			wantProtocol: "http",
+			wantToken:    true,
+		},
+		{
+			name:         "ok windsurf",
+			args:         []string{"--test.open-error", "windsurf", workspace.Name},
+			wantProtocol: "windsurf",
+		},
+		{
+			name:         "ok fleet",
+			args:         []string{"--test.open-error", "fleet", workspace.Name},
+			wantProtocol: "fleet",
+		},
+		{
+			name:         "ok cursor",
+			args:         []string{"--test.open-error", "cursor", workspace.Name},
+			wantProtocol: "cursor",
+		},
+		{
+			name:         "ok zed",
+			args:         []string{"--test.open-error", "zed", workspace.Name},
+			wantProtocol: "zed",
+		},
+		{
+			name:         "ok inside workspace windsurf",
+			env:          insideWorkspaceEnv,
+			args:         []string{"windsurf", workspace.Name},
+			wantProtocol: "windsurf",
+		},
+		{
+			name:      "nonexistent app",
+			args:      []string{"--test.open-error", "nonexistent", workspace.Name},
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			inv, root := clitest.New(t, append([]string{"open", "app"}, tt.args...)...)
+			clitest.SetupConfig(t, client, root)
+			pty := ptytest.New(t)
+			inv.Stdin = pty.Input()
+			inv.Stdout = pty.Output()
+
+			ctx := testutil.Context(t, testutil.WaitLong)
+			inv = inv.WithContext(ctx)
+			for k, v := range tt.env {
+				inv.Environ.Set(k, v)
+			}
+
+			w := clitest.StartWithWaiter(t, inv)
+
+			if tt.wantError {
+				w.RequireError()
+				return
+			}
+
+			line := pty.ReadLine(ctx)
+			u, err := url.ParseRequestURI(line)
+			require.NoError(t, err, "line: %q", line)
+
+			// Check protocol
+			if tt.wantProtocol != "" {
+				assert.Equal(t, tt.wantProtocol, u.Scheme)
+			}
+
+			// Check directory in query if applicable 
+			if tt.wantDir != "" {
+				qp := u.Query()
+				switch u.Scheme {
+				case "jetbrains-ij", "fleet", "cursor", "zed":
+					assert.Contains(t, qp.Get("dir"), tt.wantDir)
+				default:
+					// For other apps, the path may be in a different format
+				}
+			}
+
+			// Check token if applicable
+			if tt.wantToken {
+				qp := u.Query()
+				assert.NotEmpty(t, qp.Get("token"))
+			}
+
+			w.RequireSuccess()
+		})
+	}
+}
+
+// Test the direct IDE command wrappers
+func TestOpenWindsurf(t *testing.T) {
+	t.Parallel()
+
+	agentName := "agent1"
+	client, workspace, agentToken := setupWorkspaceForAgent(t, func(agents []*proto.Agent) []*proto.Agent {
+		agents[0].Name = agentName
+		agents[0].OperatingSystem = runtime.GOOS
+		return agents
+	})
+
+	_ = agenttest.New(t, client.URL, agentToken)
+	_ = coderdtest.AwaitWorkspaceAgents(t, client, workspace.ID)
+
+	inv, root := clitest.New(t, "open", "windsurf", "--test.open-error", workspace.Name)
+	clitest.SetupConfig(t, client, root)
+	pty := ptytest.New(t)
+	inv.Stdin = pty.Input()
+	inv.Stdout = pty.Output()
+
+	ctx := testutil.Context(t, testutil.WaitLong)
+	inv = inv.WithContext(ctx)
+
+	w := clitest.StartWithWaiter(t, inv)
+
+	line := pty.ReadLine(ctx)
+	u, err := url.ParseRequestURI(line)
+	require.NoError(t, err, "line: %q", line)
+
+	assert.Equal(t, "windsurf", u.Scheme)
+
+	w.RequireSuccess()
+}
+
+// setupWorkspaceForAgent is a test helper to create a workspace with an agent for testing.
+func setupWorkspaceForAgent(t *testing.T, mutations ...func([]*proto.Agent) []*proto.Agent) (*codersdk.Client, codersdk.Workspace, string) {
+	t.Helper()
+
+	client := coderdtest.New(t, &coderdtest.Options{IncludeProvisionerDaemon: true})
+	first := coderdtest.CreateFirstUser(t, client)
+	
+	// Create a base agent for mutations
+	agent := &proto.Agent{
+		Id:              uuid.NewString(),
+		Name:            "agent",
+		OperatingSystem: runtime.GOOS,
+	}
+	
+	// Apply agent mutations
+	if len(mutations) > 0 {
+		agents := []*proto.Agent{agent}
+		for _, mutate := range mutations {
+			agents = mutate(agents)
+		}
+		agent = agents[0]
+	}
+	
+	// Create template and workspace with the configured agent
+	templates := coderdtest.CreateTemplateVersionWithJobID(t, client, first.OrganizationID, &proto.Response{
+		Type: &proto.Response_Complete{
+			Complete: &proto.ProvisionComplete{
+				Resources: []*proto.Resource{{
+					Name: "example",
+					Type: "aws_instance",
+					Agents: []*proto.Agent{
+						agent,
+					},
+				}},
+			},
+		},
+	})
+	template := coderdtest.CreateTemplate(t, client, first.OrganizationID, templates.ID)
+	workspace := coderdtest.CreateWorkspace(t, client, first.OrganizationID, template.ID)
+	coderdtest.AwaitWorkspaceBuildJobCompleted(t, client, workspace.LatestBuild.ID)
+	
+	// Create an agent token
+	agentToken := uuid.NewString()
+	
+	return client, workspace, agentToken
 }

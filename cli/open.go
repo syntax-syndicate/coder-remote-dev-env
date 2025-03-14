@@ -333,27 +333,19 @@ func (r *RootCmd) openIDEHandler(inv *serpent.Invocation, client *codersdk.Clien
 		u.RawQuery = qp.Encode()
 		
 	case fleetScheme:
-		// Fleet uses a specific URI format: fleet://fleet.ssh/ssh://username@hostname:22
-		username := "coder"
-		hostname := client.URL.Hostname()
-		
+		// Fleet uses a simplified URI format with just the workspace name
 		u = &url.URL{
 			Scheme: fleetScheme,
-			Host:   "fleet.ssh",
-			Path:   fmt.Sprintf("/ssh://%s@%s:22", username, hostname),
+			Path:   fmt.Sprintf("//%s", workspace.Name),
 		}
 		// Fleet doesn't support query parameters, so we don't add them
 		
 	case zedScheme:
-		// Zed uses a simpler format per PR #19970
-		// Format: zed://coder@hostname:22
+		// Zed uses a simplified format with just the workspace name
 		// Reference: https://github.com/zed-industries/zed/pull/19970/files
-		username := "coder"
-		hostname := client.URL.Hostname()
-		
 		u = &url.URL{
 			Scheme: zedScheme,
-			Path:   fmt.Sprintf("//%s@%s:22", username, hostname),
+			Path:   fmt.Sprintf("//%s", workspace.Name),
 		}
 		// Zed doesn't support query parameters, so we don't add them
 	}

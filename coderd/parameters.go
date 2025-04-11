@@ -1,9 +1,11 @@
 package coderd
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/database/dbauthz"
@@ -26,7 +28,8 @@ import (
 // @Success 101
 // @Router /users/{user}/templateversions/{templateversion}/parameters [get]
 func (api *API) templateVersionDynamicParameters(rw http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
+	defer cancel()
 	user := httpmw.UserParam(r)
 	templateVersion := httpmw.TemplateVersionParam(r)
 

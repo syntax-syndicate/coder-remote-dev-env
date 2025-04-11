@@ -984,8 +984,6 @@ export const MockWorkspaceAppStatus: TypesGen.WorkspaceAppStatus = {
 	agent_id: "test-workspace-agent",
 	workspace_id: "test-workspace",
 	app_id: MockWorkspaceApp.id,
-	needs_user_attention: false,
-	icon: "/emojis/1f957.png",
 	uri: "https://github.com/coder/coder/pull/1234",
 	message: "Your competitors page is completed!",
 	state: "complete",

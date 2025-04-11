@@ -989,7 +989,7 @@ export const MockWorkspaceAppStatus: TypesGen.WorkspaceAppStatus = {
 	state: "complete",
 	// Deprecated fields
 	needs_user_attention: false,
-	icon: "deprecated",
+	icon: "",
 };
 
 export const MockWorkspaceAgentDisconnected: TypesGen.WorkspaceAgent = {

@@ -1,4 +1,4 @@
-package coderd
+package coderd_test
 
 import (
 	"os"

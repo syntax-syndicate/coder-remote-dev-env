@@ -5097,33 +5097,6 @@
 				}
 			}
 		},
-		"/templateversions/{templateversion}/dynamic-parameters": {
-			"get": {
-				"security": [
-					{
-						"CoderSessionToken": []
-					}
-				],
-				"tags": ["Templates"],
-				"summary": "Open dynamic parameters WebSocket by template version",
-				"operationId": "open-dynamic-parameters-websocket-by-template-version",
-				"parameters": [
-					{
-						"type": "string",
-						"format": "uuid",
-						"description": "Template version ID",
-						"name": "templateversion",
-						"in": "path",
-						"required": true
-					}
-				],
-				"responses": {
-					"101": {
-						"description": "Switching Protocols"
-					}
-				}
-			}
-		},
 		"/templateversions/{templateversion}/external-auth": {
 			"get": {
 				"security": [
@@ -6757,6 +6730,41 @@
 						"schema": {
 							"$ref": "#/definitions/codersdk.User"
 						}
+					}
+				}
+			}
+		},
+		"/users/{user}/templateversion/{templateversion}/parameters": {
+			"get": {
+				"security": [
+					{
+						"CoderSessionToken": []
+					}
+				],
+				"tags": ["Templates Workspaces"],
+				"summary": "Open dynamic parameters WebSocket by template version",
+				"operationId": "open-dynamic-parameters-websocket-by-template-version",
+				"parameters": [
+					{
+						"type": "string",
+						"format": "uuid",
+						"description": "Template version ID",
+						"name": "user",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"format": "uuid",
+						"description": "Template version ID",
+						"name": "templateversion",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"101": {
+						"description": "Switching Protocols"
 					}
 				}
 			}

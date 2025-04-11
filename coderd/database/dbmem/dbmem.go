@@ -4113,6 +4113,10 @@ func (q *FakeQuerier) GetOrganizationIDsByMemberIDs(_ context.Context, ids []uui
 	return getOrganizationIDsByMemberIDRows, nil
 }
 
+func (q *FakeQuerier) GetOrganizationMemberRoles(ctx context.Context, userID database.GetOrganizationMemberRolesParams) ([]string, error) {
+	panic("not implemented")
+}
+
 func (q *FakeQuerier) GetOrganizationResourceCountByID(_ context.Context, organizationID uuid.UUID) (database.GetOrganizationResourceCountByIDRow, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()

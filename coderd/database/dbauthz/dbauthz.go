@@ -2095,8 +2095,11 @@ func (q *querier) GetOrganizationIDsByMemberIDs(ctx context.Context, ids []uuid.
 	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetOrganizationIDsByMemberIDs)(ctx, ids)
 }
 
-func (q *querier) GetOrganizationMemberRoles(ctx context.Context, userID database.GetOrganizationMemberRolesParams) ([]string, error) {
-	panic("not implemented")
+func (q *querier) GetOrganizationMemberRoles(ctx context.Context, params database.GetOrganizationMemberRolesParams) ([]string, error) {
+	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceOrganizationMember.InOrg(params.OrganizationID)); err != nil {
+		return nil, err
+	}
+	return q.db.GetOrganizationMemberRoles(ctx, params)
 }
 
 func (q *querier) GetOrganizationResourceCountByID(ctx context.Context, organizationID uuid.UUID) (database.GetOrganizationResourceCountByIDRow, error) {

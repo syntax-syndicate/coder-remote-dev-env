@@ -20,11 +20,11 @@ import (
 // @Summary Open dynamic parameters WebSocket by template version
 // @ID open-dynamic-parameters-websocket-by-template-version
 // @Security CoderSessionToken
-// @Tags Templates Workspaces
+// @Tags Templates
 // @Param user path string true "Template version ID" format(uuid)
 // @Param templateversion path string true "Template version ID" format(uuid)
 // @Success 101
-// @Router /users/{user}/templateversion/{templateversion}/parameters [get]
+// @Router /users/{user}/templateversions/{templateversion}/parameters [get]
 func (api *API) templateVersionDynamicParameters(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := httpmw.UserParam(r)

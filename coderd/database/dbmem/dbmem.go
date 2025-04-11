@@ -4113,8 +4113,14 @@ func (q *FakeQuerier) GetOrganizationIDsByMemberIDs(_ context.Context, ids []uui
 	return getOrganizationIDsByMemberIDRows, nil
 }
 
-func (q *FakeQuerier) GetOrganizationMemberRoles(ctx context.Context, userID database.GetOrganizationMemberRolesParams) ([]string, error) {
-	panic("not implemented")
+func (q *FakeQuerier) GetOrganizationMemberRoles(ctx context.Context, params database.GetOrganizationMemberRolesParams) ([]string, error) {
+	for _, it := range q.organizationMembers {
+		if it.UserID == params.UserID && it.OrganizationID == params.OrganizationID {
+			return it.Roles, nil
+		}
+	}
+
+	return nil, sql.ErrNoRows
 }
 
 func (q *FakeQuerier) GetOrganizationResourceCountByID(_ context.Context, organizationID uuid.UUID) (database.GetOrganizationResourceCountByIDRow, error) {

@@ -21,7 +21,7 @@ func TestTemplateVersionDynamicParameters(t *testing.T) {
 	cfg.Experiments = []string{string(codersdk.ExperimentDynamicParameters)}
 	ownerClient := coderdtest.New(t, &coderdtest.Options{IncludeProvisionerDaemon: true, DeploymentValues: cfg})
 	owner := coderdtest.CreateFirstUser(t, ownerClient)
-	templateAdmin, _ := coderdtest.CreateAnotherUser(t, ownerClient, owner.OrganizationID, rbac.RoleTemplateAdmin())
+	templateAdmin, templateAdminUser := coderdtest.CreateAnotherUser(t, ownerClient, owner.OrganizationID, rbac.RoleTemplateAdmin())
 
 	dynamicParametersTerraformSource, err := os.ReadFile("testdata/dynamicparameters/groups/main.tf")
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestTemplateVersionDynamicParameters(t *testing.T) {
 	_ = coderdtest.CreateTemplate(t, templateAdmin, owner.OrganizationID, version.ID)
 
 	ctx := testutil.Context(t, testutil.WaitShort)
-	stream, err := templateAdmin.TemplateVersionDynamicParameters(ctx, version.ID)
+	stream, err := templateAdmin.TemplateVersionDynamicParameters(ctx, templateAdminUser.ID, version.ID)
 	require.NoError(t, err)
 	defer stream.Close(websocket.StatusGoingAway)
 

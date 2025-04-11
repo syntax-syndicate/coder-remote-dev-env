@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func (c *Client) TemplateVersionDynamicParameters(ctx context.Context, version uuid.UUID) (*wsjson.Stream[DynamicParametersResponse, DynamicParametersRequest], error) {
-	conn, err := c.Dial(ctx, fmt.Sprintf("/api/v2/templateversions/%s/dynamic-parameters", version), nil)
+func (c *Client) TemplateVersionDynamicParameters(ctx context.Context, userID, version uuid.UUID) (*wsjson.Stream[DynamicParametersResponse, DynamicParametersRequest], error) {
+	conn, err := c.Dial(ctx, fmt.Sprintf("/api/v2/users/%s/templateversions/%s/dynamic-parameters", userID, version), nil)
 	if err != nil {
 		return nil, err
 	}

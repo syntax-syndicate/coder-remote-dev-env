@@ -987,6 +987,9 @@ export const MockWorkspaceAppStatus: TypesGen.WorkspaceAppStatus = {
 	uri: "https://github.com/coder/coder/pull/1234",
 	message: "Your competitors page is completed!",
 	state: "complete",
+	// Deprecated fields
+	needs_user_attention: false,
+	icon: "deprecated",
 };
 
 export const MockWorkspaceAgentDisconnected: TypesGen.WorkspaceAgent = {

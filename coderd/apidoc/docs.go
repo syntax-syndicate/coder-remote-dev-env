@@ -17019,7 +17019,7 @@ const docTemplate = `{
                     "format": "date-time"
                 },
                 "icon": {
-                    "description": "Icon is an external URL to an icon that will be rendered in the UI.",
+                    "description": "Icon is an external URL to an icon that will be rendered in the UI.\nDeprecated: This field is unused and will be removed in a future version.",
                     "type": "string"
                 },
                 "id": {
@@ -17030,6 +17030,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "needs_user_attention": {
+                    "description": "Deprecated: This field is unused and will be removed in a future version.",
                     "type": "boolean"
                 },
                 "state": {
